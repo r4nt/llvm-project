@@ -278,6 +278,7 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   const FormatToken &Current = *State.NextToken;
   const FormatToken &Previous = *Current.Previous;
   assert(&Previous == Current.Previous);
+  if (!Previous.Children.empty()) return true;
   if (!Current.CanBreakBefore && !(State.Stack.back().BreakBeforeClosingBrace &&
                                    Current.closesBlockOrBlockTypeList(Style)))
     return false;
@@ -323,12 +324,14 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   if (Previous.is(tok::l_square) && Previous.is(TT_ObjCMethodExpr))
     return false;
 
+llvm::errs() << State.Stack.back().NoLineBreak << "\n";
   return !State.Stack.back().NoLineBreak;
 }
 
 bool ContinuationIndenter::mustBreak(const LineState &State) {
   const FormatToken &Current = *State.NextToken;
   const FormatToken &Previous = *Current.Previous;
+  //llvm::errs() << "Must: " << Previous.TokenText << " -> " << Current.TokenText << "\n";
   if (Current.MustBreakBefore || Current.is(TT_InlineASMColon))
     return true;
   if (State.Stack.back().BreakBeforeClosingBrace &&

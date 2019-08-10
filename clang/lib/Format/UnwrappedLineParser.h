@@ -15,9 +15,12 @@
 #ifndef LLVM_CLANG_LIB_FORMAT_UNWRAPPEDLINEPARSER_H
 #define LLVM_CLANG_LIB_FORMAT_UNWRAPPEDLINEPARSER_H
 
+#include "Encoding.h"
 #include "FormatToken.h"
+#include "Macros.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Format/Format.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/Regex.h"
 #include <list>
 #include <stack>
@@ -71,13 +74,19 @@ public:
 };
 
 class FormatTokenSource;
+class Unexpander;
 
 class UnwrappedLineParser {
 public:
-  UnwrappedLineParser(const FormatStyle &Style,
+  UnwrappedLineParser(SourceManager &SourceMgr, const FormatStyle &Style,
+                      encoding::Encoding Encoding,
                       const AdditionalKeywords &Keywords,
-                      unsigned FirstStartColumn, ArrayRef<FormatToken *> Tokens,
-                      UnwrappedLineConsumer &Callback);
+                      unsigned FirstStartColumn,
+                      SmallVectorImpl<FormatToken *> &Tokens,
+                      UnwrappedLineConsumer &Callback,
+                      llvm::SpecificBumpPtrAllocator<FormatToken> &Allocator,
+                      IdentifierTable &IdentTable);
+  ~UnwrappedLineParser();
 
   void parse();
 
@@ -128,6 +137,9 @@ private:
   bool tryToParseLambda();
   bool tryToParseLambdaIntroducer();
   void tryToParseJSFunction();
+
+  llvm::SmallVector<llvm::SmallVector<FormatToken*, 8>, 1> parseMacroCall();
+ 
   void addUnwrappedLine();
   bool eof() const;
   // LevelDifference is the difference of levels after and before the current
@@ -166,6 +178,16 @@ private:
 
   bool isOnNewLine(const FormatToken &FormatTok);
 
+  //bool unexpandLine(UnwrappedLine &Line);
+  bool containsToken(const UnwrappedLine &Line, FormatToken *Tok);
+  bool containsExpansion(const UnwrappedLine &Line);
+  void popExpandedFrom(const UnwrappedLine &Line, FormatToken *From);
+  void unexpand(UnwrappedLine &Line);
+  template <typename Iterator>
+  void unexpandRange(UnwrappedLine &Line, Iterator begin, Iterator end, bool EraseExpanded, std::string Prefix);
+  void advanceMacroState(const UnwrappedLine &Line);
+  void adaptExpandedLineBreaks();
+
   // Compute hash of the current preprocessor branch.
   // This is used to identify the different branches, and thus track if block
   // open and close in the same branch.
@@ -175,6 +197,23 @@ private:
   // subtracted from beyond 0. Introduce a method to subtract from Line.Level
   // and use that everywhere in the Parser.
   std::unique_ptr<UnwrappedLine> Line;
+
+  //std::map<FormatToken *, std::pair<std::unique_ptr<UnwrappedLine>, int>> ExpandedLines;
+  //std::unique_ptr<UnwrappedLine> ExpandedLine;
+  //std::deque<clang::SourceLocation> ToExpand;
+  //int LineStartToken = 0;
+  //bool ParsingMacroLine = false;
+  //int ToExpand = 0;
+  //bool Expanding = false;
+  //FormatToken *ExpandUntil = nullptr;
+  SmallVector<UnwrappedLine, 8> ExpandedLines;
+  //int ExpandedLinesAdded = 0;
+  std::map<FormatToken *, std::unique_ptr<UnwrappedLine>> Unexpanded;
+  //bool ExpandMacros = true;
+  bool InExpansion = false;
+llvm::SmallDenseSet<FormatToken *> ExpandedTokens;
+  std::unique_ptr<Unexpander> Unexpand;
+  //std::unique_ptr<UnwrappedLine> Unexpanded;
 
   // Comments are sorted into unwrapped lines by whether they are in the same
   // line as the previous token, or not. If not, they belong to the next token.
@@ -213,7 +252,9 @@ private:
   // FIXME: This is a temporary measure until we have reworked the ownership
   // of the format tokens. The goal is to have the actual tokens created and
   // owned outside of and handed into the UnwrappedLineParser.
-  ArrayRef<FormatToken *> AllTokens;
+  // FIXME: The above fixme doesn't work if we need to create tokens while
+  // parsing.
+  SmallVectorImpl<FormatToken *>& AllTokens;
 
   // Represents preprocessor branch type, so we can find matching
   // #if/#else/#endif directives.
@@ -273,6 +314,12 @@ private:
   // normal source code and may be nonzero when formatting a code fragment that
   // does not start at the beginning of the file.
   unsigned FirstStartColumn;
+
+  Macros M;
+
+  SourceManager &SourceMgr;
+  encoding::Encoding Encoding;
+  llvm::SpecificBumpPtrAllocator<FormatToken> &Allocator;
 
   friend class ScopedLineState;
   friend class CompoundStatementIndenter;

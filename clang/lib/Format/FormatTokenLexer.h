@@ -34,12 +34,24 @@ enum LexerState {
   TOKEN_STASHED,
 };
 
+/*class TokenSource {
+public:
+  virtual void Lex(Token& Tok) = 0;
+};*/
+
 class FormatTokenLexer {
 public:
   FormatTokenLexer(const SourceManager &SourceMgr, FileID ID, unsigned Column,
-                   const FormatStyle &Style, encoding::Encoding Encoding);
+                   const FormatStyle &Style, encoding::Encoding Encoding,
+                   llvm::SpecificBumpPtrAllocator<FormatToken> &Allocator,
+                   IdentifierTable &IdentTable);
+
+  void setPreprocessor(Preprocessor *PP) {
+    this->PP = PP;
+  }
 
   ArrayRef<FormatToken *> lex();
+  ArrayRef<FormatToken *> lexUntil(std::function<bool(FormatToken*)> End);
 
   const AdditionalKeywords &getKeywords() { return Keywords; }
 
@@ -94,13 +106,13 @@ private:
   unsigned Column;
   unsigned TrailingWhitespace;
   std::unique_ptr<Lexer> Lex;
+  Preprocessor *PP = nullptr;
   const SourceManager &SourceMgr;
   FileID ID;
   const FormatStyle &Style;
-  IdentifierTable IdentTable;
+  IdentifierTable &IdentTable;
   AdditionalKeywords Keywords;
   encoding::Encoding Encoding;
-  llvm::SpecificBumpPtrAllocator<FormatToken> Allocator;
   // Index (in 'Tokens') of the last token that starts a new line.
   unsigned FirstInLineIndex;
   SmallVector<FormatToken *, 16> Tokens;
@@ -111,6 +123,7 @@ private:
 
   llvm::Regex MacroBlockBeginRegex;
   llvm::Regex MacroBlockEndRegex;
+  llvm::SpecificBumpPtrAllocator<FormatToken> &Allocator;
 
   void readRawToken(FormatToken &Tok);
 

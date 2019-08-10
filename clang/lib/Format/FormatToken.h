@@ -121,6 +121,8 @@ enum ParameterPackingKind { PPK_BinPacked, PPK_OnePerLine, PPK_Inconclusive };
 
 enum FormatDecision { FD_Unformatted, FD_Continue, FD_Break };
 
+enum MacroState { MS_None, MS_Expansion, MS_Call, MS_Hidden };
+
 class TokenRole;
 class AnnotatedLine;
 
@@ -206,7 +208,9 @@ struct FormatToken {
 
   /// A token can have a special role that can carry extra information
   /// about the token's formatting.
-  std::unique_ptr<TokenRole> Role;
+  /// FIXME: Make FormatToken for parsing and AnnotatedToken two different
+  /// classes and make this a unique_ptr in the AnnotatedToken class.
+  std::shared_ptr<TokenRole> Role;
 
   /// If this is an opening parenthesis, how are the parameters packed?
   ParameterPackingKind PackingKind = PPK_Inconclusive;
@@ -308,6 +312,19 @@ struct FormatToken {
   /// potentially re-formatted inside), and we do not allow further formatting
   /// changes.
   bool Finalized = false;
+
+  bool MacroID = false;
+
+  //bool Annotated = false;
+
+  MacroState Macro = MS_None;
+
+  llvm::SmallVector<FormatToken*, 1> ExpandedFrom;
+  FormatToken *MacroCallID = nullptr;
+
+  //FormatToken *ExpandedFrom = nullptr;
+  bool StartOfExpansion = false;
+  int EndOfExpansion = 0;
 
   bool is(tok::TokenKind Kind) const { return Tok.is(Kind); }
   bool is(TokenType TT) const { return Type == TT; }
@@ -547,10 +564,19 @@ struct FormatToken {
                : nullptr;
   }
 
+  void setType(TokenType T) {
+    if (Macro == MS_Call) return;
+    Type = T;
+  }
+
+  void copyInto(FormatToken &Tok) {
+    Tok = *this;
+  }
+
 private:
-  // Disallow copying.
+  // Only allow copying via the explicit copyInto method.
   FormatToken(const FormatToken &) = delete;
-  void operator=(const FormatToken &) = delete;
+  FormatToken &operator=(const FormatToken &) = default;
 
   template <typename A, typename... Ts>
   bool startsSequenceInternal(A K1, Ts... Tokens) const {

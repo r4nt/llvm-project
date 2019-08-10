@@ -674,7 +674,12 @@ private:
 
 static void markFinalized(FormatToken *Tok) {
   for (; Tok; Tok = Tok->Next) {
-    Tok->Finalized = true;
+    if (Tok->Macro == MS_Expansion) {
+      Tok->Macro = MS_Call;
+      Tok->SpacesRequiredBefore = 0;
+    } else {
+      Tok->Finalized = true;
+    }
     for (AnnotatedLine *Child : Tok->Children)
       markFinalized(Child->First);
   }
@@ -731,12 +736,16 @@ protected:
   bool formatChildren(LineState &State, bool NewLine, bool DryRun,
                       unsigned &Penalty) {
     const FormatToken *LBrace = State.NextToken->getPreviousNonComment();
+    bool HasLBrace = LBrace && LBrace->is(tok::l_brace) &&
+        LBrace->BlockKind == BK_Block;
     FormatToken &Previous = *State.NextToken->Previous;
-    if (!LBrace || LBrace->isNot(tok::l_brace) ||
-        LBrace->BlockKind != BK_Block || Previous.Children.size() == 0)
+    //llvm::errs() << "LBRACE: " << LBrace->MacroID << " " << LBrace->TokenText << " " << Previous.Children.size() << "\n";
+    if (Previous.Children.size() == 0 || 
+        (!HasLBrace && !LBrace->MacroID))
       // The previous token does not open a block. Nothing to do. We don't
       // assert so that we can simply call this function for all tokens.
       return true;
+    //ssert(false);
 
     if (NewLine) {
       int AdditionalIndent = State.Stack.back().Indent -
@@ -747,7 +756,11 @@ protected:
                                  /*FixBadIndentation=*/true);
       return true;
     }
-
+//auto rp = [](int line) -> bool {
+//  llvm::errs() << "false " << line << "\n";
+//  return false;
+//};
+//#define false rp(__LINE__)
     if (Previous.Children[0]->First->MustBreakBefore)
       return false;
 
@@ -769,7 +782,7 @@ protected:
     if (Style.ColumnLimit > 0 &&
         Child->Last->TotalLength + State.Column + 2 > Style.ColumnLimit)
       return false;
-
+//#undef false
     if (!DryRun) {
       Whitespaces->replaceWhitespace(
           *Child->First, /*Newlines=*/0, /*Spaces=*/1,
@@ -981,8 +994,9 @@ private:
 
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
-    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty))
+    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty)) {
       return;
+    }
 
     Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
 
@@ -1067,6 +1081,7 @@ unsigned UnwrappedLineFormatter::format(
     // We cannot format this line; if the reason is that the line had a
     // parsing error, remember that.
     if (ShouldFormat && TheLine.Type == LT_Invalid && Status) {
+      llvm::errs() << "CANNOT FORMAT!!!\n";
       Status->FormatComplete = false;
       Status->Line =
           SourceMgr.getSpellingLineNumber(TheLine.First->Tok.getLocation());
@@ -1155,6 +1170,7 @@ void UnwrappedLineFormatter::formatFirstToken(
                                    TokenIndent);
     return;
   }
+  //llvm::errs() << "NLB: " << RootToken.NewlinesBefore << "\n";
   unsigned Newlines =
       std::min(RootToken.NewlinesBefore, Style.MaxEmptyLinesToKeep + 1);
   // Remove empty lines before "}" where applicable.
@@ -1167,8 +1183,10 @@ void UnwrappedLineFormatter::formatFirstToken(
   // Remove empty lines at the start of nested blocks (lambdas/arrow functions)
   if (PreviousLine == nullptr && Line.Level > 0)
     Newlines = std::min(Newlines, 1u);
+  //llvm::errs() << "NLB4: " << Newlines << "\n";
   if (Newlines == 0 && !RootToken.IsFirst)
     Newlines = 1;
+  //llvm::errs() << "NLB3: " << Newlines << "\n";
   if (RootToken.IsFirst && !RootToken.HasUnescapedNewline)
     Newlines = 0;
 

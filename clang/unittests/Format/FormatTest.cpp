@@ -13351,6 +13351,53 @@ TEST_F(FormatTest, MergeLessLessAtEnd) {
                "aaaallvm::outs()\n    <<");
 }
 
+TEST_F(FormatTest, TodoMacros) {
+  FormatStyle Style = getLLVMStyle();
+  Style.Macros.push_back("CLASS class C {");
+  Style.Macros.push_back("SEMI ;");
+  Style.Macros.push_back("STMT f();");
+  Style.Macros.push_back("ID(x) x");
+  Style.Macros.push_back("ID3(x, y, z) x y z");
+  Style.Macros.push_back("CALL(x) f([] { x })");
+
+  verifyFormat("CLASS\n"
+               "  a *b;\n"
+               "};", Style);
+  verifyFormat("SEMI\n"
+               "SEMI\n"
+               "SEMI", Style);
+  //verifyFormat("void f() { ID(a *b); }", Style);
+  //verifyFormat("ID({ ID(a *b); });", Style);
+
+  Style.ColumnLimit = 10;
+  // Problem now is that we get actual child lines first, need
+  // to figure out how to not call expand on them.
+  //verifyFormat("ID(CALL(CALL(a * b)));", Style);
+  //verifyFormat("STMT\n"
+  //             "STMT\n"
+  //             "STMT", Style);
+  /*EXPECT_EQ(R"(
+ID3({
+  CLASS
+  a *b;
+      };
+},
+    ID(a *b);
+    ,
+    STMT STMT STMT
+)
+void f();
+)",
+            format(R"(
+ID3({CLASS a*b; };}, ID(a*b);, STMT STMT STMT)
+void f();
+)",
+                   Style));*/
+
+  //verifyFormat("a; b; c;");
+  //verifyFormat("void f() { a *b; }");
+}
+
 TEST_F(FormatTest, HandleUnbalancedImplicitBracesAcrossPPBranches) {
   std::string code = "#if A\n"
                      "#if B\n"
