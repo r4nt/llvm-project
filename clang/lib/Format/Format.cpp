@@ -598,6 +598,7 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("TypenameMacros", Style.TypenameMacros);
     IO.mapOptional("UseCRLF", Style.UseCRLF);
     IO.mapOptional("UseTab", Style.UseTab);
+    IO.mapOptional("Macros", Style.Macros);
   }
 };
 

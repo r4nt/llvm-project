@@ -278,6 +278,12 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   const FormatToken &Current = *State.NextToken;
   const FormatToken &Previous = *Current.Previous;
   assert(&Previous == Current.Previous);
+
+  // We can always break before a macro argument to underline the structure
+  // of the expanded code.
+  if (!Previous.Children.empty() && Previous.MacroCtx.MacroParent)
+    return true;
+
   if (!Current.CanBreakBefore && !(State.Stack.back().BreakBeforeClosingBrace &&
                                    Current.closesBlockOrBlockTypeList(Style)))
     return false;

@@ -52,6 +52,7 @@ public:
     // left them in a different state.
     First->Previous = nullptr;
     FormatToken *Current = First;
+    addChildren(Line.Tokens.front(), Current);
     for (std::list<UnwrappedLineNode>::const_iterator I = ++Line.Tokens.begin(),
                                                       E = Line.Tokens.end();
          I != E; ++I) {
@@ -59,14 +60,18 @@ public:
       Current->Next = I->Tok;
       I->Tok->Previous = Current;
       Current = Current->Next;
-      Current->Children.clear();
-      for (const auto &Child : Node.Children) {
-        Children.push_back(new AnnotatedLine(Child));
-        Current->Children.push_back(Children.back());
-      }
+      addChildren(Node, Current);
     }
     Last = Current;
     Last->Next = nullptr;
+  }
+
+  void addChildren(const UnwrappedLineNode &Node, FormatToken *Current) {
+    Current->Children.clear();
+    for (const auto &Child : Node.Children) {
+      Children.push_back(new AnnotatedLine(Child));
+      Current->Children.push_back(Children.back());
+    }
   }
 
   ~AnnotatedLine() {

@@ -133,6 +133,57 @@ enum ParameterPackingKind { PPK_BinPacked, PPK_OnePerLine, PPK_Inconclusive };
 
 enum FormatDecision { FD_Unformatted, FD_Continue, FD_Break };
 
+/// Roles a token can take in a configured macro expansion.
+enum MacroRole {
+  /// The token was not expanded from a macro call.
+  MR_None,
+  /// The token was expanded from a macro argument when formatting the expanded
+  /// token sequence.
+  MR_ExpandedArg,
+  /// The token is part of a macro argument that was previously formatted as
+  /// expansion when formatting the unexpanded macro call.
+  MR_UnexpandedArg,
+  /// The token was expanded from a macro definition, and is not visible as part
+  /// of the macro call.
+  MR_Hidden,
+};
+
+struct FormatToken;
+struct MacroContext {
+  /// The token's role in the macro expansion.
+  /// When formatting an expanded macro, all tokens that are part of macro
+  /// arguments will be MR_ExpandedArg, while all tokens that are not visible in
+  /// the macro call will be MR_Hidden.
+  /// When formatting an unexpanded macro call, all tokens that are part of
+  /// macro arguments will be MR_UnexpandedArg.
+  MacroRole Role = MR_None;
+
+  /// The stack of macro call identifier tokens this token was expanded from.
+  /// Given the definition: P(a) (a)
+  /// And the call: P(  {  P(x)  }  )
+  ///               \- P0  \- P1
+  /// ExpandedFrom stacks for each generated token will be:
+  /// ( -> P0
+  /// { -> P0
+  /// ( -> P0, P1
+  /// x -> P0, P1
+  /// ) -> P0, P1
+  /// } -> P0
+  /// ) -> P0
+  llvm::SmallVector<FormatToken *, 1> ExpandedFrom;
+
+  /// Whether this token is the first token in a macro expansion.
+  bool StartOfExpansion = false;
+
+  /// The number of currently open expansions in \c ExpandedFrom this macro is
+  /// the last token in.
+  size_t EndOfExpansion = 0;
+
+  /// When macro expansion introduces parents, those are marked as
+  /// \c MacroParent, so formatting knows their children need to be formatted.
+  bool MacroParent = false;
+};
+
 class TokenRole;
 class AnnotatedLine;
 
@@ -203,7 +254,14 @@ struct FormatToken {
   /// Returns the token's type, e.g. whether "<" is a template opener or
   /// binary operator.
   TokenType getType() const { return Type; }
-  void setType(TokenType T) { Type = T; }
+  void setType(TokenType T) {
+    // If this token is a macro argument while formatting an unexpanded macro
+    // call, we do not change its type any more - the type was deduced from
+    // formatting the expanded macro stream already.
+    if (MacroCtx.Role == MR_UnexpandedArg)
+      return;
+    Type = T;
+  }
 
   /// The number of spaces that should be inserted before this token.
   unsigned SpacesRequiredBefore = 0;
@@ -227,7 +285,9 @@ struct FormatToken {
 
   /// A token can have a special role that can carry extra information
   /// about the token's formatting.
-  std::unique_ptr<TokenRole> Role;
+  /// FIXME: Make FormatToken for parsing and AnnotatedToken two different
+  /// classes and make this a unique_ptr in the AnnotatedToken class.
+  std::shared_ptr<TokenRole> Role;
 
   /// If this is an opening parenthesis, how are the parameters packed?
   ParameterPackingKind PackingKind = PPK_Inconclusive;
@@ -329,6 +389,10 @@ struct FormatToken {
   /// potentially re-formatted inside), and we do not allow further formatting
   /// changes.
   bool Finalized = false;
+
+  // Contains all attributes related to how this token takes part
+  // in a configured macro expansion.
+  MacroContext MacroCtx;
 
   bool is(tok::TokenKind Kind) const { return Tok.is(Kind); }
   bool is(TokenType TT) const { return Type == TT; }
@@ -571,10 +635,12 @@ struct FormatToken {
                : nullptr;
   }
 
+  void copyInto(FormatToken &Tok) { Tok = *this; }
+
 private:
-  // Disallow copying.
+  // Only allow copying via the explicit copyInto method.
   FormatToken(const FormatToken &) = delete;
-  void operator=(const FormatToken &) = delete;
+  FormatToken &operator=(const FormatToken &) = default;
 
   template <typename A, typename... Ts>
   bool startsSequenceInternal(A K1, Ts... Tokens) const {

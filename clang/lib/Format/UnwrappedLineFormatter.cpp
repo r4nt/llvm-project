@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "UnwrappedLineFormatter.h"
+#include "FormatToken.h"
 #include "NamespaceEndCommentsFixer.h"
 #include "WhitespaceManager.h"
 #include "llvm/Support/Debug.h"
@@ -724,9 +725,12 @@ private:
 
 static void markFinalized(FormatToken *Tok) {
   for (; Tok; Tok = Tok->Next) {
-    Tok->Finalized = true;
-    for (AnnotatedLine *Child : Tok->Children)
-      markFinalized(Child->First);
+    if (Tok->MacroCtx.Role == MR_ExpandedArg) {
+      Tok->MacroCtx.Role = MR_UnexpandedArg;
+      Tok->SpacesRequiredBefore = 0;
+    } else {
+      Tok->Finalized = true;
+    }
   }
 }
 
@@ -781,9 +785,11 @@ protected:
   bool formatChildren(LineState &State, bool NewLine, bool DryRun,
                       unsigned &Penalty) {
     const FormatToken *LBrace = State.NextToken->getPreviousNonComment();
+    bool HasLBrace =
+        LBrace && LBrace->is(tok::l_brace) && LBrace->BlockKind == BK_Block;
     FormatToken &Previous = *State.NextToken->Previous;
-    if (!LBrace || LBrace->isNot(tok::l_brace) ||
-        LBrace->BlockKind != BK_Block || Previous.Children.size() == 0)
+    if (Previous.Children.size() == 0 ||
+        (!HasLBrace && !LBrace->MacroCtx.MacroParent))
       // The previous token does not open a block. Nothing to do. We don't
       // assert so that we can simply call this function for all tokens.
       return true;
@@ -820,16 +826,17 @@ protected:
         Child->Last->TotalLength + State.Column + 2 > Style.ColumnLimit)
       return false;
 
+    int Spaces = HasLBrace ? 1 : 0;
     if (!DryRun) {
       Whitespaces->replaceWhitespace(
-          *Child->First, /*Newlines=*/0, /*Spaces=*/1,
+          *Child->First, /*Newlines=*/0, /*Spaces=*/Spaces,
           /*StartOfTokenColumn=*/State.Column, /*IsAligned=*/false,
           State.Line->InPPDirective);
     }
-    Penalty +=
-        formatLine(*Child, State.Column + 1, /*FirstStartColumn=*/0, DryRun);
+    Penalty += formatLine(*Child, State.Column + Spaces, /*FirstStartColumn=*/0,
+                          DryRun);
 
-    State.Column += 1 + Child->Last->TotalLength;
+    State.Column += Spaces + Child->Last->TotalLength;
     return true;
   }
 
