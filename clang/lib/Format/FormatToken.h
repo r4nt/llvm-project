@@ -182,7 +182,14 @@ struct FormatToken {
   /// Contains the kind of block if this token is a brace.
   BraceBlockKind BlockKind = BK_Unknown;
 
-  TokenType Type = TT_Unknown;
+  /// Returns the token's type, e.g. whether "<" is a template opener or
+  /// binary operator.
+  TokenType getType() const {
+    return Type;
+  }
+  void setType(TokenType T) {
+    Type = T;
+  }
 
   /// The number of spaces that should be inserted before this token.
   unsigned SpacesRequiredBefore = 0;
@@ -577,6 +584,8 @@ private:
       return Previous->endsSequenceInternal(K1, Tokens...);
     return is(K1) && Previous && Previous->endsSequenceInternal(Tokens...);
   }
+
+  TokenType Type = TT_Unknown;
 };
 
 class ContinuationIndenter;
