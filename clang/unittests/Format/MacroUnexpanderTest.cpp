@@ -399,6 +399,83 @@ TEST_F(MacroUnexpanderTest, ReverseOrderArgumentsInExpansion) {
   EXPECT_THAT(Unexp.getResult(), matchesLine(Expected));
 }
 
+TEST_F(MacroUnexpanderTest, MultipleToplevelUnwrappedLines) {
+  auto Macros = create({"ID(a, b) a b"});
+  Expansion Exp(Lex, *Macros);
+  TokenList Call = Exp.expand("ID", {std::string("x; x"), "y"});
+
+  Unexpander Unexp(0, Exp.getUnexpanded());
+  Matcher E(Exp.getTokens());
+  Unexp.addLine(line(E.consume(lex("x;"))));
+  Unexp.addLine(line(E.consume(lex("x y"))));
+  EXPECT_TRUE(Unexp.finished());
+  Matcher U(Call);
+  auto Expected = line({
+      U.consume(lex("ID(")),
+      children({
+          line(U.consume(lex("x;"))),
+          line(U.consume(lex("x"))),
+      }),
+      U.consume(lex(", y)")),
+  });
+  EXPECT_THAT(Unexp.getResult(), matchesLine(Expected));
+}
+
+TEST_F(MacroUnexpanderTest, NestedCallsMultipleLines) {
+  auto Macros = create({"ID(x) x"});
+  // Test: ID({ID(a * b);})
+  // 1. expand ID(a * b)
+  Expansion Exp1(Lex, *Macros);
+  TokenList Call1 = Exp1.expand("ID", {"a * b"});
+  // 2. expand ID({ a * b; })
+  Expansion Exp2(Lex, *Macros);
+  TokenList Arg2;
+  Arg2.push_back(Lex.id("{"));
+  Arg2.append(Exp1.getTokens().begin(), Exp1.getTokens().end());
+  Arg2.push_back(Lex.id(";"));
+  Arg2.push_back(Lex.id("}"));
+  TokenList Call2 = Exp2.expand("ID", {Arg2});
+
+  // Consume as-if formatted in three unwrapped lines:
+  // 0: {
+  // 1:   a * b;
+  // 2: }
+  UnexpandedMap Unexpanded = 
+      mergeUnexpanded(Exp1.getUnexpanded(), Exp2.getUnexpanded());
+  Unexpander Unexp(0, Unexpanded);
+  Matcher E(Exp2.getTokens());
+  Unexp.addLine(line(E.consume(lex("{"))));
+  Unexp.addLine(line(E.consume(lex("a * b;"))));
+  Unexp.addLine(line(E.consume(lex("}"))));
+  EXPECT_TRUE(Unexp.finished());
+
+  // Expect lines:
+  // ID(
+  //     {
+  //     ID(a * b);
+  //     }
+  // )
+  Matcher U1(Call1);
+  Matcher U2(Call2);
+  auto Chunk2Start = U2.consume(lex("ID("));
+  auto Chunk2LBrace = U2.consume(lex("{"));
+  U2.consume(lex("a * b"));
+  auto Chunk2Semi = U2.consume(lex(";"));
+  auto Chunk2RBrace = U2.consume(lex("}"));
+  auto Chunk2End = U2.consume(lex(")"));
+  auto Chunk1 = U1.consume(lex("ID(a * b)"));
+
+  auto Expected = line({
+      Chunk2Start,
+      children({
+        line({Chunk2LBrace}),
+        line({Chunk1,Chunk2Semi}),
+        line({Chunk2RBrace}),
+      }),
+      Chunk2End,
+  });
+  EXPECT_THAT(Unexp.getResult(), matchesLine(Expected));
+}
 } // namespace
 } // namespace format
 } // namespace clang

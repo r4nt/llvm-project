@@ -2424,7 +2424,7 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
       Current->SpacesRequiredBefore = 1;
     }
 
-    Current->MustBreakBefore =
+    Current->MustBreakBefore = 
         Current->MustBreakBefore || mustBreakBefore(Line, *Current);
 
     if (!Current->MustBreakBefore && InFunctionDecl &&
@@ -3204,8 +3204,13 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
     return true;
   if (Right.is(TT_OverloadedOperatorLParen))
     return spaceRequiredBeforeParens(Right);
-  if (Left.is(tok::comma))
+  if (Left.is(tok::comma) &&
+      (Left.Children.empty() || !Left.MacroCtx.MacroParent)) {
+    llvm::dbgs() << "LC: " << Left.Children.empty()
+                 << ", MP: " << Left.MacroCtx.MacroParent << "\n";
+    llvm::dbgs() << "LEFTISCOMMA!!!\n";
     return true;
+  }
   if (Right.is(tok::comma))
     return false;
   if (Right.is(TT_ObjCBlockLParen))
@@ -3379,7 +3384,6 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   const FormatToken &Left = *Right.Previous;
   if (Right.NewlinesBefore > 1 && Style.MaxEmptyLinesToKeep > 0)
     return true;
-
   if (Style.isCSharp()) {
     if (Right.is(TT_CSharpNamedArgumentColon) ||
         Left.is(TT_CSharpNamedArgumentColon))
@@ -3427,7 +3431,6 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
       }
       llvm_unreachable("Unknown FormatStyle::ShortLambdaStyle enum");
     }
-
     if (Right.is(tok::r_brace) && Left.is(tok::l_brace) &&
         !Left.Children.empty())
       // Support AllowShortFunctionsOnASingleLine for JavaScript.
@@ -3475,8 +3478,9 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
     return Left.BlockKind != BK_BracedInit &&
            Left.isNot(TT_CtorInitializerColon) &&
            (Right.NewlinesBefore > 0 && Right.HasUnescapedNewline);
-  if (Left.isTrailingComment())
-    return true;
+if (Left.isTrailingComment() &&
+    (Left.Children.empty() || !Left.MacroCtx.MacroParent))
+  return true;
   if (Right.Previous->IsUnterminatedLiteral)
     return true;
   if (Right.is(tok::lessless) && Right.Next &&

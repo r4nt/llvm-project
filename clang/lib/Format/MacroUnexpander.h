@@ -85,7 +85,7 @@ private:
       FormatToken *Parent = nullptr);
   void add(FormatToken *Token, FormatToken *OriginalParent, bool First);
   void prepareParent(FormatToken *OriginalParent, bool First);
-  FormatToken *getParentInOutput(FormatToken *Parent);
+  FormatToken *getParentInOutput(FormatToken *Parent, bool First);
   void unexpand(FormatToken *Token);
   void startUnexpansion(FormatToken *Token);
   bool continueUnexpansionUntil(FormatToken *Token);
@@ -194,6 +194,12 @@ private:
   // of the same line as the opening brace.
   llvm::SmallVector<Line *, 4> ExpandedParens;
 
+  struct MacroCallState {
+    Line *Line;
+    FormatToken *Token;
+    unsigned Lines;
+  };
+
   // Keeps track of the lines into which the opening brace/parenthesis &
   // argument separating commas for each level in the macro call go in order to
   // put the corresponding closing brace/parenthesis into the same line in the
@@ -207,7 +213,7 @@ private:
   // |- ,
   // |  \- <argument>
   // \- )
-  llvm::SmallVector<Line *, 4> MacroCallStructure;
+  llvm::SmallVector<MacroCallState, 4> MacroCallStructure;
 
   // For each token, the previous token in the resulting unexpanded token
   // stream.

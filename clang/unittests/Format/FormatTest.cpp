@@ -15654,8 +15654,8 @@ ID(namespace foo {
                    Style));
   verifyFormat(R"(ID(
     //
- ({ ; })
-))", Style);
+ ({ ; }))
+)", Style);
 
   Style.ColumnLimit = 35;
   // FIXME: Arbitrary formatting of macros where the end of the logical
@@ -15714,6 +15714,12 @@ void f();
                "#endif\n"
                "    ))",
                Style);
+  Style.ColumnLimit = 80;
+  verifyFormat(R"(ASSIGN_OR_RETURN(
+    // Comment
+    a b
+    , c);
+)", Style);
 }
 
 TEST_F(FormatTest, HandleUnbalancedImplicitBracesAcrossPPBranches) {

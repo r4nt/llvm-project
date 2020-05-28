@@ -36,7 +36,7 @@ enum LineType {
 
 class AnnotatedLine {
 public:
-  AnnotatedLine(const UnwrappedLine &Line)
+  AnnotatedLine(const UnwrappedLine &Line, FormatToken **Back = nullptr)
       : First(Line.Tokens.front().Tok), Level(Line.Level),
         MatchingOpeningBlockLineIndex(Line.MatchingOpeningBlockLineIndex),
         MatchingClosingBlockLineIndex(Line.MatchingClosingBlockLineIndex),
@@ -52,7 +52,7 @@ public:
     // left them in a different state.
     First->Previous = nullptr;
     FormatToken *Current = First;
-    addChildren(Line.Tokens.front(), Current);
+    FormatToken *PreviousBack = addChildren(Line.Tokens.front(), Current);
     for (std::list<UnwrappedLineNode>::const_iterator I = ++Line.Tokens.begin(),
                                                       E = Line.Tokens.end();
          I != E; ++I) {
@@ -60,18 +60,25 @@ public:
       Current->Next = I->Tok;
       I->Tok->Previous = Current;
       Current = Current->Next;
-      addChildren(Node, Current);
+      PreviousBack = addChildren(Node, Current);
+      // FIXME: if we add children, previous will point to the token before
+      // the children, which leads to incorrect results in mustBreakBefore etc.
     }
-    Last = Current;
+    if (Back)
+      *Back = PreviousBack;
+    Last = std::prev(Line.Tokens.end())->Tok;
     Last->Next = nullptr;
   }
 
-  void addChildren(const UnwrappedLineNode &Node, FormatToken *Current) {
+  FormatToken *addChildren(const UnwrappedLineNode &Node,
+                           FormatToken *Current) {
     Current->Children.clear();
+    FormatToken *Back = Current;
     for (const auto &Child : Node.Children) {
-      Children.push_back(new AnnotatedLine(Child));
+      Children.push_back(new AnnotatedLine(Child, &Back));
       Current->Children.push_back(Children.back());
     }
+    return Back;
   }
 
   ~AnnotatedLine() {
