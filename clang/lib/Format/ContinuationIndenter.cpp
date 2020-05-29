@@ -17,6 +17,7 @@
 #include "WhitespaceManager.h"
 #include "clang/Basic/OperatorPrecedence.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/TokenKinds.h"
 #include "clang/Format/Format.h"
 #include "llvm/Support/Debug.h"
 
@@ -281,7 +282,8 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
 
   // We can always break before a macro argument to underline the structure
   // of the expanded code.
-  if (!Previous.Children.empty() && Previous.MacroCtx.MacroParent)
+  if (!Previous.Children.empty() && Previous.MacroCtx.MacroParent &&
+      !Current.is(tok::comma))
     return true;
 
   if (!Current.CanBreakBefore && !(State.Stack.back().BreakBeforeClosingBrace &&
@@ -335,6 +337,7 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
 bool ContinuationIndenter::mustBreak(const LineState &State) {
   const FormatToken &Current = *State.NextToken;
   const FormatToken &Previous = *Current.Previous;
+llvm::dbgs() << "MUSTBREAK: " << Current.TokenText << "\n";
   if (Style.BraceWrapping.BeforeLambdaBody && Current.CanBreakBefore &&
       Current.is(TT_LambdaLBrace) && Previous.isNot(TT_LineComment)) {
     auto LambdaBodyLength = getLengthToMatchingParen(Current, State.Stack);
@@ -428,7 +431,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
         Style.Language == FormatStyle::LK_JavaScript) &&
       !(Previous.closesScopeAfterBlock() && State.Column <= NewLineColumn))
     return true;
-
+llvm::dbgs() << "10\n";
   // If the template declaration spans multiple lines, force wrap before the
   // function/class declaration
   if (Previous.ClosesTemplateDeclaration &&
@@ -519,9 +522,9 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
 
   if (Previous.is(TT_BlockComment) && Previous.IsMultiline)
     return true;
-
   if (State.NoContinuation)
     return true;
+llvm::dbgs() << "END\n";
 
   return false;
 }

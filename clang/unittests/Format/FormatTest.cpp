@@ -15621,7 +15621,9 @@ TEST_F(FormatTest, UnexpandConfiguredMacros) {
                "STMT",
                Style);
   verifyFormat("void f() { ID(a *b); }", Style);
-  verifyFormat("ID({ ID(a *b); });", Style);
+  verifyFormat(R"(ID(
+    { ID(a *b); }
+);)", Style);
 
   verifyFormat("ID(CALL(CALL(return a * b;)));", Style);
   verifyFormat("ASIGN_OR_RETURN(MySomewhatLongType *variable,\n"
@@ -15638,7 +15640,11 @@ int c;
 int d;
 int e;
 int f;
-ID(namespace foo { int a; }) // namespace k
+ID(
+    namespace foo {
+    int a;
+    }
+) // namespace k
 )",
             format(R"(
 int a;
@@ -15647,23 +15653,25 @@ int c;
 int d;
 int e;
 int f;
-ID(namespace foo { 
-  int a;
-})  // namespace k
+ID(namespace foo { int a; })  // namespace k
 )",
                    Style));
   verifyFormat(R"(ID(
     //
- ({ ; }))
-)", Style);
+    ({ ; })
+))", Style);
 
   Style.ColumnLimit = 35;
   // FIXME: Arbitrary formatting of macros where the end of the logical
   // line is in the middle of a macro call are not working yet.
-  verifyFormat(R"(ID(void f();
-   void
-) ID(g) ID(())
-       ID(;void g();))",
+  verifyFormat(R"(ID(
+    void f();
+    void
+    )
+ID(g) ID(()) ID(
+    ;
+    void g();
+))",
                Style);
 
   Style.ColumnLimit = 10;
@@ -15691,12 +15699,18 @@ ID(CALL(CALL(a * b)));
   // of !consumeToken() changes the formatting of the test below and makes it
   // believe it has a fully correct formatting.
   EXPECT_EQ(R"(
-ID3({CLASS
-    a *b; };
-},
+ID3(
+    {
+    CLASS
+    a *b;
+    };
+    }
+    ,
     ID(x *y);
     ,
-    STMT STMT STMT
+    STMT
+    STMT
+    STMT
 )
 void f();
 )",
@@ -15704,7 +15718,7 @@ void f();
 ID3({CLASS a*b; };}, ID(x*y);, STMT STMT STMT)
 void f();
 )",
-                   Style, SC_ExpectIncomplete));
+                   Style));
 
   verifyFormat("ID(a(\n"
                "#ifdef A\n"
@@ -15717,8 +15731,7 @@ void f();
   Style.ColumnLimit = 80;
   verifyFormat(R"(ASSIGN_OR_RETURN(
     // Comment
-    a b
-    , c);
+    a b, c);
 )", Style);
 }
 

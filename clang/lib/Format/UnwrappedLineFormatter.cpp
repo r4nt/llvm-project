@@ -794,7 +794,7 @@ protected:
       // assert so that we can simply call this function for all tokens.
       return true;
 
-    if (NewLine) {
+    if (NewLine || Previous.MacroCtx.MacroParent) {
       int AdditionalIndent = State.Stack.back().Indent -
                              Previous.Children[0]->Level * Style.IndentWidth;
 
@@ -803,28 +803,33 @@ protected:
                                  /*FixBadIndentation=*/true);
       return true;
     }
+    llvm::dbgs() << "Previous: " << Previous.TokenText << "\n";
 
     if (Previous.Children[0]->First->MustBreakBefore)
       return false;
-
+llvm::dbgs() << "1\n";
     // Cannot merge into one line if this line ends on a comment.
     if (Previous.is(tok::comment))
       return false;
-
-    // Cannot merge multiple statements into a single line.
-    if (Previous.Children.size() > 1)
-      return false;
+    llvm::dbgs() << "2\n";
 
     const AnnotatedLine *Child = Previous.Children[0];
-    // We can't put the closing "}" on a line with a trailing comment.
-    if (Child->Last->isTrailingComment())
-      return false;
+      // Cannot merge multiple statements into a single line.
+      if (Previous.Children.size() > 1)
+        return false;
+      llvm::dbgs() << "3\n";
 
-    // If the child line exceeds the column limit, we wouldn't want to merge it.
-    // We add +2 for the trailing " }".
-    if (Style.ColumnLimit > 0 &&
-        Child->Last->TotalLength + State.Column + 2 > Style.ColumnLimit)
-      return false;
+      // We can't put the closing "}" on a line with a trailing comment.
+      if (Child->Last->isTrailingComment())
+        return false;
+      llvm::dbgs() << "4\n";
+
+      // If the child line exceeds the column limit, we wouldn't want to merge
+      // it. We add +2 for the trailing " }".
+      if (Style.ColumnLimit > 0 &&
+          Child->Last->TotalLength + State.Column + 2 > Style.ColumnLimit)
+        return false;
+      llvm::dbgs() << "5\n";
 
     int Spaces = HasLBrace ? 1 : 0;
     if (!DryRun) {
@@ -1032,6 +1037,8 @@ private:
   /// penalty of \p Penalty. Insert a line break if \p NewLine is \c true.
   void addNextStateToQueue(unsigned Penalty, StateNode *PreviousNode,
                            bool NewLine, unsigned *Count, QueueType *Queue) {
+    llvm::dbgs() << PreviousNode->State.NextToken->TokenText
+                 << " NEWLINE: " << NewLine << "\n";
     if (NewLine && !Indenter->canBreak(PreviousNode->State))
       return;
     if (!NewLine && Indenter->mustBreak(PreviousNode->State))
@@ -1039,8 +1046,10 @@ private:
 
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
-    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty))
+    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty)) {
+      llvm::dbgs() << "Formatting children failed!\n";
       return;
+    }
 
     Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
 
