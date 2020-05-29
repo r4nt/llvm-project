@@ -3206,9 +3206,6 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
     return spaceRequiredBeforeParens(Right);
   if (Left.is(tok::comma) &&
       (Left.Children.empty() || !Left.MacroCtx.MacroParent)) {
-    llvm::dbgs() << "LC: " << Left.Children.empty()
-                 << ", MP: " << Left.MacroCtx.MacroParent << "\n";
-    llvm::dbgs() << "LEFTISCOMMA!!!\n";
     return true;
   }
   if (Right.is(tok::comma))
@@ -3478,9 +3475,8 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
     return Left.BlockKind != BK_BracedInit &&
            Left.isNot(TT_CtorInitializerColon) &&
            (Right.NewlinesBefore > 0 && Right.HasUnescapedNewline);
-if (Left.isTrailingComment() &&
-    (Left.Children.empty() || !Left.MacroCtx.MacroParent))
-  return true;
+  if (Left.isTrailingComment())
+    return true;
   if (Right.Previous->IsUnterminatedLiteral)
     return true;
   if (Right.is(tok::lessless) && Right.Next &&
@@ -3950,13 +3946,6 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     if (isAllmanLambdaBrace(Right))
       return !isItAnEmptyLambdaAllowed(Right, ShortLambdaOption);
   }
-
-//llvm::dbgs() << "*** HERE ***\n";
-  if (Left.is(tok::l_paren) && Left.MacroCtx.MacroParent &&
-      Right.is(tok::comma)) {
-//        llvm::dbgs() << "And out\n";
-    return false;
-      }
 
   return Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace,
                       tok::kw_class, tok::kw_struct, tok::comment) ||

@@ -15622,10 +15622,12 @@ TEST_F(FormatTest, UnexpandConfiguredMacros) {
                Style);
   verifyFormat("void f() { ID(a *b); }", Style);
   verifyFormat(R"(ID(
-    { ID(a *b); }
-);)", Style);
+    { ID(a *b); });
+)", Style);
 
-  verifyFormat("ID(CALL(CALL(return a * b;)));", Style);
+  verifyFormat("ID(CALL(\n"
+               "    CALL(return a * b;)));",
+               Style);
   verifyFormat("ASIGN_OR_RETURN(MySomewhatLongType *variable,\n"
                "                MySomewhatLongFunction(SomethingElse()));\n",
                Style);
@@ -15643,8 +15645,7 @@ int f;
 ID(
     namespace foo {
     int a;
-    }
-) // namespace k
+    }) // namespace k
 )",
             format(R"(
 int a;
@@ -15658,20 +15659,19 @@ ID(namespace foo { int a; })  // namespace k
                    Style));
   verifyFormat(R"(ID(
     //
-    ({ ; })
-))", Style);
+    ({ ; }))
+)", Style);
 
   Style.ColumnLimit = 35;
   // FIXME: Arbitrary formatting of macros where the end of the logical
   // line is in the middle of a macro call are not working yet.
   verifyFormat(R"(ID(
     void f();
-    void
-    )
+    void)
 ID(g) ID(()) ID(
     ;
-    void g();
-))",
+    void g();)
+)",
                Style);
 
   Style.ColumnLimit = 10;
@@ -15683,8 +15683,7 @@ ID(g) ID(()) ID(
   EXPECT_EQ(R"(
 ID(CALL(
     CALL(
-        a *b
-    )
+        a *b)
     ));
 )",
             format(R"(
@@ -15704,14 +15703,11 @@ ID3(
     CLASS
     a *b;
     };
-    }
-    ,
-    ID(x *y);
-    ,
+    },
+    ID(x *y);,
     STMT
     STMT
-    STMT
-)
+    STMT)
 void f();
 )",
             format(R"(
