@@ -1040,10 +1040,10 @@ private:
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
     if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty)) {
-      LLVM_DEBUG(llvm::dbgs() << "Formatting children failed!\n");
+      LLVM_DEBUG(llvm::dbgs() << "Formatting children failed! "
+                              << Node->State.NextToken->Previous->TokenText << "\n");
       return;
     }
-
     Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
 
     Queue->push(QueueItem(OrderedPenalty(Penalty, *Count), Node));

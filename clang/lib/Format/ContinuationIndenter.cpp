@@ -282,7 +282,8 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
 
   // We can always break before a macro argument to underline the structure
   // of the expanded code.
-  if (!Previous.Children.empty() && Previous.MacroCtx.MacroParent)
+  if (!Previous.Children.empty() && Previous.MacroCtx.MacroParent
+  && !Current.is(tok::comma))
     return true;
 
   if (!Current.CanBreakBefore && !(State.Stack.back().BreakBeforeClosingBrace &&
@@ -654,6 +655,7 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
   if (Style.AlignAfterOpenBracket != FormatStyle::BAS_DontAlign &&
       !State.Stack.back().IsCSharpGenericTypeConstraint &&
       Previous.opensScope() && Previous.isNot(TT_ObjCMethodExpr) &&
+      !Previous.MacroCtx.MacroParent &&
       (Current.isNot(TT_LineComment) || Previous.BlockKind == BK_BracedInit)) {
     State.Stack.back().Indent = State.Column + Spaces;
     State.Stack.back().IsAligned = true;
@@ -956,7 +958,6 @@ unsigned ContinuationIndenter::getNewLineColumn(const LineState &State) {
   if (State.Stack.back().IsCSharpGenericTypeConstraint &&
       Current.isNot(TT_CSharpGenericTypeConstraint))
     return State.Stack.back().ColonPos + 2;
-
   const FormatToken &Previous = *Current.Previous;
   // If we are continuing an expression, we want to use the continuation indent.
   unsigned ContinuationIndent =
@@ -1348,6 +1349,7 @@ void ContinuationIndenter::moveStatePastFakeLParens(LineState &State,
          (Style.Language != FormatStyle::LK_Java && *I > 0)) &&
         (Style.AlignAfterOpenBracket != FormatStyle::BAS_DontAlign ||
          *I != prec::Comma || Current.NestingLevel == 0)) {
+
       NewParenState.Indent =
           std::max(std::max(State.Column, NewParenState.Indent),
                    State.Stack.back().LastSpace);

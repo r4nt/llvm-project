@@ -15729,6 +15729,19 @@ void f();
     // Comment
     a b, c);
 )", Style);
+Style.ColumnLimit = 30;
+  verifyFormat(R"(ASSIGN_OR_RETURN(
+    // Comment
+    //
+    a b,
+    xxxxxxxxxxxx(
+        yyyyyyyyyyyyyyyyy,
+        zzzzzzzzzzzzzzzzzz),
+    f([]() {
+      a();
+      b();
+    }));
+)", Style);
 }
 
 TEST_F(FormatTest, HandleUnbalancedImplicitBracesAcrossPPBranches) {

@@ -2041,7 +2041,7 @@ public:
       }
 
       // Consume scopes: (), [], <> and {}
-      if (Current->opensScope()) {
+      if (Current->opensScope() && !Current->MacroCtx.MacroParent) {
         // In fragment of a JavaScript template string can look like '}..${' and
         // thus close a scope and open a new one at the same time.
         while (Current && (!Current->closesScope() || Current->opensScope())) {
@@ -2059,7 +2059,7 @@ public:
           ++OperatorIndex;
         }
         next(/*SkipPastLeadingComments=*/Precedence > 0);
-      }
+      } 
     }
 
     if (LatestOperator && (Current || Precedence > 0)) {
@@ -3946,6 +3946,12 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     if (isAllmanLambdaBrace(Right))
       return !isItAnEmptyLambdaAllowed(Right, ShortLambdaOption);
   }
+
+  if (Left.is(tok::l_paren) && Left.MacroCtx.MacroParent &&
+      Right.is(tok::comma)) {
+        llvm::dbgs() << "And out\n";
+    return false;
+      }
 
   return Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace,
                       tok::kw_class, tok::kw_struct, tok::comment) ||
