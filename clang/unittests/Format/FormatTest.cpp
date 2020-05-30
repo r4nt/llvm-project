@@ -15705,9 +15705,9 @@ ID3(
     };
     },
     ID(x *y);,
-    STMT
-    STMT
-    STMT)
+STMT
+STMT
+STMT)
 void f();
 )",
             format(R"(

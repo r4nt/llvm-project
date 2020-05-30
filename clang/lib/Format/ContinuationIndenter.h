@@ -211,8 +211,7 @@ struct ParenState {
         HasMultipleNestedBlocks(false), NestedBlockInlined(false),
         IsInsideObjCArrayLiteral(false), IsCSharpGenericTypeConstraint(false),
         IsChainedConditional(false), IsWrappedConditional(false),
-        UnindentOperator(false) {
-        }
+        UnindentOperator(false) {}
 
   /// \brief The token opening this parenthesis level, or nullptr if this level
   /// is opened by fake parenthesis.

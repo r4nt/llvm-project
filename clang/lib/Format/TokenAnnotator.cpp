@@ -3947,12 +3947,6 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
       return !isItAnEmptyLambdaAllowed(Right, ShortLambdaOption);
   }
 
-  if (Left.is(tok::l_paren) && Left.MacroCtx.MacroParent &&
-      Right.is(tok::comma)) {
-        llvm::dbgs() << "And out\n";
-    return false;
-      }
-
   return Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace,
                       tok::kw_class, tok::kw_struct, tok::comment) ||
          Right.isMemberAccess() ||

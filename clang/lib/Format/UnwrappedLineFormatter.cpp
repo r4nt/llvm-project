@@ -1044,6 +1044,7 @@ private:
                               << Node->State.NextToken->Previous->TokenText << "\n");
       return;
     }
+
     Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
 
     Queue->push(QueueItem(OrderedPenalty(Penalty, *Count), Node));
