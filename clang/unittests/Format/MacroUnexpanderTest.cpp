@@ -270,14 +270,21 @@ TEST_F(MacroUnexpanderTest, NestedBlock) {
   // })
   Matcher U1(Call1);
   Matcher U2(Call2);
-  auto Chunk2Start = U2.consume(lex("ID({"));
+  auto Chunk2Start = U2.consume(lex("ID("));
+  auto Chunk2LBrace = U2.consume(lex("{"));
   U2.consume(lex("a *b"));
   auto Chunk2Mid = U2.consume(lex(";"));
-  auto Chunk2End = U2.consume(lex("})"));
+  auto Chunk2RBrace = U2.consume(lex("}"));
+  auto Chunk2End = U2.consume(lex(")"));
   auto Chunk1 = U1.consume(lex("ID(a *b)"));
 
-  auto Expected =
-      line({Chunk2Start, children({line({Chunk1, Chunk2Mid})}), Chunk2End});
+  auto Expected = line({Chunk2Start,
+                        children({
+                            line(Chunk2LBrace),
+                            line({Chunk1, Chunk2Mid}),
+                            line(Chunk2RBrace),
+                        }),
+                        Chunk2End});
   EXPECT_THAT(Unexp.getResult(), matchesLine(Expected));
 }
 
@@ -332,9 +339,11 @@ TEST_F(MacroUnexpanderTest, NestedChildBlocks) {
   Matcher U1(Call1);
   Matcher U2(Call2);
   Matcher U3(Call3);
-  auto Chunk3Start = U3.consume(lex("ID({"));
+  auto Chunk3Start = U3.consume(lex("ID("));
+  auto Chunk3LBrace = U3.consume(lex("{"));
   U3.consume(lex("f([] { f([] { return a * b; }) })"));
-  auto Chunk3End = U3.consume(lex("})"));
+  auto Chunk3RBrace = U3.consume(lex("}"));
+  auto Chunk3End = U3.consume(lex(")"));
   auto Chunk2Start = U2.consume(lex("CALL("));
   U2.consume(lex("f([] { return a * b; })"));
   auto Chunk2End = U2.consume(lex(")"));
@@ -344,15 +353,19 @@ TEST_F(MacroUnexpanderTest, NestedChildBlocks) {
 
   auto Expected = line({
       Chunk3Start,
-      children({line({
-          Chunk2Start,
-          children({line({
-              Chunk1Start,
-              children({line({Chunk1Mid})}),
-              Chunk1End,
-          })}),
-          Chunk2End,
-      })}),
+      children({
+          line(Chunk3LBrace),
+          line({
+              Chunk2Start,
+              children({line({
+                  Chunk1Start,
+                  children({line({Chunk1Mid})}),
+                  Chunk1End,
+              })}),
+              Chunk2End,
+          }),
+          line(Chunk3RBrace),
+      }),
       Chunk3End,
   });
   EXPECT_THAT(Unexp.getResult(), matchesLine(Expected));
