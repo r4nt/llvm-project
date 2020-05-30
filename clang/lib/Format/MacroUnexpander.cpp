@@ -94,7 +94,7 @@ void Unexpander::add(FormatToken *Token, FormatToken *OriginalParent,
 
   // Closing braces/parentheses go into the same line as the corresponding
   // opening brace/parenthesis.
-  //if ((Token->is(tok::r_brace) || Token->is(tok::r_paren)) &&
+  // if ((Token->is(tok::r_brace) || Token->is(tok::r_paren)) &&
   //    !ExpandedParens.empty()) {
   //  Lines.pop_back();
   //  Lines.push_back(ExpandedParens.back());
@@ -110,7 +110,7 @@ void Unexpander::add(FormatToken *Token, FormatToken *OriginalParent,
     unexpand(Token);
   }
 
-  //if (Token->is(tok::l_brace) || Token->is(tok::l_paren)) {
+  // if (Token->is(tok::l_brace) || Token->is(tok::l_paren)) {
   //  assert(!Lines.empty());
   //  ExpandedParens.push_back(Lines.back());
   //}
@@ -136,8 +136,9 @@ void Unexpander::prepareParent(FormatToken *OriginalParent, bool First) {
       assert(!Lines.empty());
     }
     assert(!Lines.empty());
-    //if (Parent)
-    //llvm::dbgs() << "P: " << Parent->TokenText << ", " << Lines.back()->Tokens.back()->Tok->TokenText << "\n";
+    // if (Parent)
+    // llvm::dbgs() << "P: " << Parent->TokenText << ", " <<
+    // Lines.back()->Tokens.back()->Tok->TokenText << "\n";
     Lines.back()->Tokens.back()->Children.push_back(std::make_unique<Line>());
     Lines.push_back(&*Lines.back()->Tokens.back()->Children.back());
   } else if (parentLine().Tokens.back()->Tok != Parent) {
@@ -181,20 +182,21 @@ FormatToken *Unexpander::getParentInOutput(FormatToken *Parent, bool First) {
               std::make_move_iterator(I),
               std::make_move_iterator(MacroLine->Tokens.end()));
           MacroLine->Tokens.erase(I, MacroLine->Tokens.end());
-          //llvm::dbgs() << "Fixed line:\n";
-          //debug(*MacroLine, 0);
+          // llvm::dbgs() << "Fixed line:\n";
+          // debug(*MacroLine, 0);
         }
       }
       // FIXME: Fix the line!
     }
-    for (auto I = MacroCallStructure.rbegin(), E = MacroCallStructure.rend(); I != E; ++I) {
+    for (auto I = MacroCallStructure.rbegin(), E = MacroCallStructure.rend();
+         I != E; ++I) {
       if (I->Lines > 1) {
         Parent = I->Token;
         Parent->MacroCtx.MacroParent = true;
         return Parent;
       }
     }
-    //if (MacroCallStructure.back().Lines > 1) {
+    // if (MacroCallStructure.back().Lines > 1) {
     //  Parent = MacroCallStructure.back().Token;
     //  return Parent;
     //}
@@ -241,7 +243,7 @@ void Unexpander::unexpand(FormatToken *Token) {
       assert(Unexpanded.back().I->Tok == Token);
       processNextUnexpanded();
     } else if (!currentLine()->Tokens.empty()) {
- // FIXME:assert(!currentLine()->Tokens.empty());
+      // FIXME:assert(!currentLine()->Tokens.empty());
       // Map all hidden tokens to the last visible token in the output.
       // If the hidden token is a parent, we'll use the last visible
       // token as the parent of the hidden token's children.
@@ -367,8 +369,8 @@ void Unexpander::processNextUnexpanded() {
     if (Token->is(tok::comma)) {
       MacroCallStructure.back().Token = Token;
       MacroCallStructure.back().Lines = 1;
-      TokenToParentInOutput[MacroCallStructure.back().Line->Tokens.back()->Tok] =
-          Token;
+      TokenToParentInOutput
+          [MacroCallStructure.back().Line->Tokens.back()->Tok] = Token;
     }
     pushToken(Token, MacroCallStructure.back().Line);
     if (Token->is(tok::r_paren)) {
@@ -427,7 +429,7 @@ void Unexpander::finalize() {
 
 void Unexpander::pushToken(FormatToken *Token, Line *L) {
   L = L ? L : currentLine();
-  //debug(*Lines.back(), 0);
+  // debug(*Lines.back(), 0);
   LLVM_DEBUG(llvm::dbgs() << "-> " << Token->TokenText << "\n");
   L->Tokens.push_back(std::make_unique<LineNode>(Token));
   if (PreviousNode != nullptr) {

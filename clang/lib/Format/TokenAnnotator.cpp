@@ -2059,7 +2059,7 @@ public:
           ++OperatorIndex;
         }
         next(/*SkipPastLeadingComments=*/Precedence > 0);
-      } 
+      }
     }
 
     if (LatestOperator && (Current || Precedence > 0)) {
@@ -2424,7 +2424,7 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
       Current->SpacesRequiredBefore = 1;
     }
 
-    Current->MustBreakBefore = 
+    Current->MustBreakBefore =
         Current->MustBreakBefore || mustBreakBefore(Line, *Current);
 
     if (!Current->MustBreakBefore && InFunctionDecl &&

@@ -1040,8 +1040,9 @@ private:
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
     if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty)) {
-      LLVM_DEBUG(llvm::dbgs() << "Formatting children failed! "
-                              << Node->State.NextToken->Previous->TokenText << "\n");
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Formatting children failed! "
+                 << Node->State.NextToken->Previous->TokenText << "\n");
       return;
     }
 

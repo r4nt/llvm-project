@@ -15623,7 +15623,8 @@ TEST_F(FormatTest, UnexpandConfiguredMacros) {
   verifyFormat("void f() { ID(a *b); }", Style);
   verifyFormat(R"(ID(
     { ID(a *b); });
-)", Style);
+)",
+               Style);
 
   verifyFormat("ID(CALL(\n"
                "    CALL(return a * b;)));",
@@ -15660,7 +15661,8 @@ ID(namespace foo { int a; })  // namespace k
   verifyFormat(R"(ID(
     //
     ({ ; }))
-)", Style);
+)",
+               Style);
 
   Style.ColumnLimit = 35;
   // FIXME: Arbitrary formatting of macros where the end of the logical
@@ -15728,8 +15730,9 @@ void f();
   verifyFormat(R"(ASSIGN_OR_RETURN(
     // Comment
     a b, c);
-)", Style);
-Style.ColumnLimit = 30;
+)",
+               Style);
+  Style.ColumnLimit = 30;
   verifyFormat(R"(ASSIGN_OR_RETURN(
     // Comment
     //
@@ -15741,7 +15744,8 @@ Style.ColumnLimit = 30;
       a();
       b();
     }));
-)", Style);
+)",
+               Style);
 }
 
 TEST_F(FormatTest, HandleUnbalancedImplicitBracesAcrossPPBranches) {

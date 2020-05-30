@@ -453,7 +453,7 @@ TEST_F(MacroUnexpanderTest, NestedCallsMultipleLines) {
   // 0: {
   // 1:   a * b;
   // 2: }
-  UnexpandedMap Unexpanded = 
+  UnexpandedMap Unexpanded =
       mergeUnexpanded(Exp1.getUnexpanded(), Exp2.getUnexpanded());
   Unexpander Unexp(0, Unexpanded);
   Matcher E(Exp2.getTokens());
@@ -481,9 +481,9 @@ TEST_F(MacroUnexpanderTest, NestedCallsMultipleLines) {
   auto Expected = line({
       Chunk2Start,
       children({
-        line({Chunk2LBrace}),
-        line({Chunk1,Chunk2Semi}),
-        line({Chunk2RBrace}),
+          line({Chunk2LBrace}),
+          line({Chunk1, Chunk2Semi}),
+          line({Chunk2RBrace}),
       }),
       Chunk2End,
   });
