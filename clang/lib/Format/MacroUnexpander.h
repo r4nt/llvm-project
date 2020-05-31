@@ -85,6 +85,9 @@ private:
       FormatToken *Parent = nullptr);
   void add(FormatToken *Token, FormatToken *OriginalParent, bool First);
   void prepareParent(FormatToken *OriginalParent, bool First);
+  bool findParent(FormatToken *Parent, bool First);
+  bool currentLineEndsWith(FormatToken *Parent);
+  FormatToken *prepareMacroCallParent(bool First);
   FormatToken *getParentInOutput(FormatToken *Parent, bool First);
   void unexpand(FormatToken *Token);
   void startUnexpansion(FormatToken *Token);

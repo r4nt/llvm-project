@@ -17,6 +17,7 @@
 
 #include "FormatToken.h"
 #include "UnwrappedLineParser.h"
+#include "clang/Basic/FileSystemStatCache.h"
 #include "clang/Basic/TokenKinds.h"
 #include "llvm/Support/Debug.h"
 #include <map>
@@ -125,82 +126,112 @@ void Unexpander::prepareParent(FormatToken *OriginalParent, bool First) {
   // We want to find the parent in the new unwrapped line, where the original
   // parent might have been replaced by an unxpansion.
   FormatToken *Parent = getParentInOutput(OriginalParent, First);
-  LLVM_DEBUG(llvm::dbgs() << "Unex: New parent: "
+  LLVM_DEBUG(llvm::dbgs() << "Unex: unexpanded parent: "
                           << (Parent ? Parent->TokenText : "<null>") << "\n");
-  if (First || (!Lines.back()->Tokens.empty() &&
-                Parent == Lines.back()->Tokens.back()->Tok)) {
-    // If we are at the first token in a new line, we want to also
-    // create a new line in the resulting unexpanded unwrapped line.
-    while (Parent != Lines.back()->Tokens.back()->Tok) {
+  bool Found = findParent(Parent, First);
+  LLVM_DEBUG(llvm::dbgs() << "Found parent: " << Found << " / " << Lines.size() << "\n");
+  if (!Found && !MacroCallStructure.empty()) {
+    Parent = prepareMacroCallParent(First);
+    LLVM_DEBUG(llvm::dbgs() << "Unex: macro call parent: "
+                            << (Parent ? Parent->TokenText : "<null>") << "\n");
+  }
+  if (!Found && MacroCallStructure.empty()) {
+    assert((Found || !MacroCallStructure.empty()) &&
+           "Did not find parent outside macro call.");
+    while (Lines.size() > 1) {
       Lines.pop_back();
-      assert(!Lines.empty());
     }
-    assert(!Lines.empty());
-    // if (Parent)
-    // llvm::dbgs() << "P: " << Parent->TokenText << ", " <<
-    // Lines.back()->Tokens.back()->Tok->TokenText << "\n";
+    llvm::dbgs() << "WILLY NILLY ADDING NEW LINE!!!\n";
     Lines.back()->Tokens.back()->Children.push_back(std::make_unique<Line>());
     Lines.push_back(&*Lines.back()->Tokens.back()->Children.back());
-  } else if (parentLine().Tokens.back()->Tok != Parent) {
-    // If we're not the first token in a new line, pop lines until we find
-    // the child of \c Parent in the stack.
-    while (Parent != parentLine().Tokens.back()->Tok) {
-      Lines.pop_back();
-      assert(!Lines.empty());
-    }
+    return;
   }
+  assert((currentLineEndsWith(Parent) ||
+          Parent == parentLine().Tokens.back()->Tok));
+  if (First || currentLineEndsWith(Parent)) {
+    // If we are at the first token in a new line, we want to also
+    // create a new line in the resulting unexpanded unwrapped line.
+    if (First && !currentLineEndsWith(Parent)) {
+      Lines.pop_back();
+      assert(currentLineEndsWith(Parent));
+    }
+    assert(!Lines.empty());
+    Lines.back()->Tokens.back()->Children.push_back(std::make_unique<Line>());
+    Lines.push_back(&*Lines.back()->Tokens.back()->Children.back());
+  } 
   assert(parentLine().Tokens.back()->Tok == Parent);
   assert(!Lines.empty());
+}
+
+bool Unexpander::findParent(FormatToken *Parent, bool First) {
+  if (currentLineEndsWith(Parent))
+    return true;
+  auto I = MacroCallStructure.rbegin();
+  //if (Parent == nullptr) return false;
+  while(!Lines.empty() && !parentLine().Tokens.empty()) {
+    // Do not pop past the line which started the current macro unexpansion.
+    if (I != MacroCallStructure.rend() &&
+        I->Line == &parentLine()) {
+      if (First || I->Lines > 1)
+        return false;
+      ++I;
+    }
+    if (parentLine().Tokens.back()->Tok == Parent)
+      return true;
+    if (Lines.size() == 1)
+      return false;
+    Lines.pop_back();
+    assert(!Lines.empty());
+  }
+  return false;
+}
+
+bool Unexpander::currentLineEndsWith(FormatToken *Parent) {
+  return !Lines.empty() && !Lines.back()->Tokens.empty() &&
+         Parent == Lines.back()->Tokens.back()->Tok;
+}
+
+FormatToken *Unexpander::prepareMacroCallParent(bool First) {
+  assert(!MacroCallStructure.empty());
+  if (First) {
+    ++MacroCallStructure.back().Lines;
+    if (MacroCallStructure.back().Lines == 2) {
+      // Move the tokens from the last macro call structural token to the end
+      // of the line into a new line.
+      Line *MacroLine = MacroCallStructure.back().Line;
+      FormatToken *MacroToken = MacroCallStructure.back().Token;
+      auto *I = std::find_if(MacroLine->Tokens.begin(), MacroLine->Tokens.end(),
+                             [&](auto &T) { return T->Tok == MacroToken; });
+      assert(I != MacroLine->Tokens.end());
+      if (std::next(I) != MacroLine->Tokens.end()) {
+        LineNode *MacroNode = (*I).get();
+        MacroNode->Children.push_back(std::make_unique<Line>());
+
+        I = std::next(I);
+        MacroNode->Children.back()->Tokens.append(
+            std::make_move_iterator(I),
+            std::make_move_iterator(MacroLine->Tokens.end()));
+        MacroLine->Tokens.erase(I, MacroLine->Tokens.end());
+      }
+    }
+  }
+  for (auto I = MacroCallStructure.rbegin(), E = MacroCallStructure.rend();
+       I != E; ++I) {
+    if (I->Lines > 1) {
+      FormatToken *Parent = I->Token;
+      Parent->MacroCtx.MacroParent = true;
+      if (!currentLineEndsWith(Parent) && !findParent(Parent, true))
+        return nullptr;
+      return Parent;
+    }
+  }
+  assert(false && "Did not find macro call with multiple lines.");
+  return nullptr;
 }
 
 // For a given \p Parent in the incoming expanded token stream, find the
 // corresponding parent in the output.
 FormatToken *Unexpander::getParentInOutput(FormatToken *Parent, bool First) {
-  // FIXME: We might have a parent but not find it here:
-  // Test:
-  // []() {
-  //   ID(f());
-  // }
-  if (!Parent && !MacroCallStructure.empty()) {
-    if (First) {
-      ++MacroCallStructure.back().Lines;
-      if (MacroCallStructure.back().Lines == 2) {
-        // Move the tokens from the last macro call structural token to the end
-        // of the line into a new line.
-        Line *MacroLine = MacroCallStructure.back().Line;
-        FormatToken *MacroToken = MacroCallStructure.back().Token;
-        auto *I =
-            std::find_if(MacroLine->Tokens.begin(), MacroLine->Tokens.end(),
-                         [&](auto &T) { return T->Tok == MacroToken; });
-        assert(I != MacroLine->Tokens.end());
-        if (std::next(I) != MacroLine->Tokens.end()) {
-          LineNode *MacroNode = (*I).get();
-          MacroNode->Children.push_back(std::make_unique<Line>());
-
-          I = std::next(I);
-          MacroNode->Children.back()->Tokens.append(
-              std::make_move_iterator(I),
-              std::make_move_iterator(MacroLine->Tokens.end()));
-          MacroLine->Tokens.erase(I, MacroLine->Tokens.end());
-          // llvm::dbgs() << "Fixed line:\n";
-          // debug(*MacroLine, 0);
-        }
-      }
-      // FIXME: Fix the line!
-    }
-    for (auto I = MacroCallStructure.rbegin(), E = MacroCallStructure.rend();
-         I != E; ++I) {
-      if (I->Lines > 1) {
-        Parent = I->Token;
-        Parent->MacroCtx.MacroParent = true;
-        return Parent;
-      }
-    }
-    // if (MacroCallStructure.back().Lines > 1) {
-    //  Parent = MacroCallStructure.back().Token;
-    //  return Parent;
-    //}
-  }
   auto I = TokenToParentInOutput.find(Parent);
   if (I == TokenToParentInOutput.end())
     return Parent;
@@ -211,6 +242,7 @@ FormatToken *Unexpander::getParentInOutput(FormatToken *Parent, bool First) {
   // If we use a different token than the parent in the expanded token stream
   // as parent, mark it as a special parent, so the formatting code knows it
   // needs to have its children formatted.
+  // FIXME: Only do this if it's actually used as parent.
   Parent->MacroCtx.MacroParent = true;
   return Parent;
 }
@@ -398,17 +430,16 @@ void Unexpander::finalize() {
     return;
   assert(State == InProgress && Unexpanded.empty());
   State = Finalized;
-
+  LLVM_DEBUG({
+    llvm::dbgs() << "Finalizing unexpanded lines:\n";
+    debug(Output, 0);
+  });
   // We created corresponding unwrapped lines for each incoming line as children
   // the the toplevel null token.
   assert(Output.Tokens.size() == 1 && !Output.Tokens.front()->Children.empty());
   // The first line becomes the top level line in the resuling unwrapped line.
   auto *I = Output.Tokens.front()->Children.begin();
   ++I;
-  LLVM_DEBUG({
-    llvm::dbgs() << "Finalizing unexpanded lines:\n";
-    debug(Output, 0);
-  });
   for (auto *E = Output.Tokens.front()->Children.end(); I != E; ++I) {
     if ((*I)->Tokens.empty())
       continue;
