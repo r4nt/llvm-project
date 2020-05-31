@@ -489,6 +489,43 @@ TEST_F(MacroUnexpanderTest, NestedCallsMultipleLines) {
   });
   EXPECT_THAT(Unexp.getResult(), matchesLine(Expected));
 }
+
+TEST_F(MacroUnexpanderTest, ParentOutsideMacroCall) {
+  auto Macros = create({"ID(a) a"});
+  Expansion Exp(Lex, *Macros);
+  TokenList Call = Exp.expand("ID", {std::string("x; y; z;")});
+
+  Unexpander Unexp(0, Exp.getUnexpanded());
+  Matcher E(Exp.getTokens());
+  Unexp.addLine(line({
+      tokens("int a = []() {"),
+      children({
+          line(E.consume(lex("x;"))),
+          line(E.consume(lex("y;"))),
+          line(E.consume(lex("z;"))),
+      }),
+      tokens("}();"),
+  }));
+  EXPECT_TRUE(Unexp.finished());
+  Matcher U(Call);
+  auto Expected = line({
+    tokens("int a = []() {"),
+    children({
+      line({
+        U.consume(lex("ID(")),
+        children({
+          line(U.consume(lex("x;"))),
+          line(U.consume(lex("y;"))),
+          line(U.consume(lex("z;"))),
+        }),
+        U.consume(lex(")")),
+      }),
+    }),
+    tokens("}();"),
+  });
+  EXPECT_THAT(Unexp.getResult(), matchesLine(Expected));
+}
+
 } // namespace
 } // namespace format
 } // namespace clang

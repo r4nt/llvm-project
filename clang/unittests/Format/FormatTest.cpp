@@ -15746,6 +15746,11 @@ void f();
     }));
 )",
                Style);
+  verifyFormat(R"(
+int a = []() {
+  ID(x;y;z;);
+}();
+)", Style);
 }
 
 TEST_F(FormatTest, HandleUnbalancedImplicitBracesAcrossPPBranches) {

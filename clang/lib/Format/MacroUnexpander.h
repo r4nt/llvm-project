@@ -192,7 +192,7 @@ private:
   // 3: };
   // In the resulting unwrapped line, we want the closing brace to be part
   // of the same line as the opening brace.
-  llvm::SmallVector<Line *, 4> ExpandedParens;
+  //llvm::SmallVector<Line *, 4> ExpandedParens;
 
   struct MacroCallState {
     Line *Line;
