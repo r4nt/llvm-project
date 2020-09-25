@@ -2740,6 +2740,8 @@ struct FormatStyle {
   /// \version 3.7
   std::string MacroBlockEnd;
 
+  std::vector<std::string> Macros;
+
   /// The maximum number of consecutive empty lines to keep.
   /// \code
   ///    MaxEmptyLinesToKeep: 1         vs.     MaxEmptyLinesToKeep: 0
@@ -3826,7 +3828,8 @@ struct FormatStyle {
            StatementAttributeLikeMacros == R.StatementAttributeLikeMacros &&
            StatementMacros == R.StatementMacros && TabWidth == R.TabWidth &&
            UseTab == R.UseTab && UseCRLF == R.UseCRLF &&
-           TypenameMacros == R.TypenameMacros;
+           TypenameMacros == R.TypenameMacros &&
+           Macros == R.Macros;
   }
 
   llvm::Optional<FormatStyle> GetLanguageStyle(LanguageKind Language) const;

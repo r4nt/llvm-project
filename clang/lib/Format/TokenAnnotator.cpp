@@ -2170,6 +2170,13 @@ public:
       // Consume operators with higher precedence.
       parse(Precedence + 1);
 
+      // Do not assign fake parenthesis to tokens that are part of an
+      // unexpanded macro call. The line within the macro call contains
+      // the parenthesis and commas, and we will not find operators within
+      // that structure.
+      if (Current && Current->MacroParent)
+        break;
+
       int CurrentPrecedence = getCurrentPrecedence();
 
       if (Current && Current->is(TT_SelectorName) &&
@@ -2452,7 +2459,7 @@ static bool isFunctionDeclarationName(bool IsCpp, const FormatToken &Current,
     if (!Current.is(TT_StartOfName) || Current.NestingLevel != 0)
       return false;
     for (; Next; Next = Next->Next) {
-      if (Next->is(TT_TemplateOpener)) {
+      if (Next->is(TT_TemplateOpener) && Next->MatchingParen) {
         Next = Next->MatchingParen;
       } else if (Next->is(tok::coloncolon)) {
         Next = Next->Next;
@@ -2604,6 +2611,7 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
     Current->CanBreakBefore =
         Current->MustBreakBefore || canBreakBefore(Line, *Current);
     unsigned ChildSize = 0;
+
     if (Current->Previous->Children.size() == 1) {
       FormatToken &LastOfChild = *Current->Previous->Children[0]->Last;
       ChildSize = LastOfChild.isTrailingComment() ? Style.ColumnLimit
@@ -3508,8 +3516,14 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
   if (Right.isOneOf(TT_TrailingReturnArrow, TT_LambdaArrow) ||
       Left.isOneOf(TT_TrailingReturnArrow, TT_LambdaArrow))
     return true;
-  if (Left.is(tok::comma) && !Right.is(TT_OverloadedOperatorLParen))
+  if (Left.is(tok::comma) && !Right.is(TT_OverloadedOperatorLParen) &&
+      // In an unexpanded macro call we only find the parentheses and commas
+      // in a line; the commas and closing parenthesis do not require a space.
+      (Left.Children.empty() || !Left.MacroParent)) {
     return true;
+  }
+  //if (Right.is(TT_OverloadedOperatorLParen))
+  //  return spaceRequiredBeforeParens(Right);
   if (Right.is(tok::comma))
     return false;
   if (Right.is(TT_ObjCBlockLParen))
