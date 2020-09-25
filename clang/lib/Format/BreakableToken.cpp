@@ -764,8 +764,6 @@ BreakableLineCommentSection::BreakableLineCommentSection(
        CurrentTok = CurrentTok->Next) {
     LastLineTok = LineTok;
     StringRef TokenText(CurrentTok->TokenText);
-    assert((TokenText.startswith("//") || TokenText.startswith("#")) &&
-           "unsupported line comment prefix, '//' and '#' are supported");
     size_t FirstLineIndex = Lines.size();
     TokenText.split(Lines, "\n");
     Content.resize(Lines.size());
