@@ -16,6 +16,7 @@ add_clang_unittest(FormatTests
   FormatTestTableGen.cpp
   FormatTestTextProto.cpp
   MacroExpanderTest.cpp
+  MacroUnexpanderTest.cpp
   NamespaceEndCommentsFixerTest.cpp
   SortImportsTestJS.cpp
   SortImportsTestJava.cpp
