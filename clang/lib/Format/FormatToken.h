@@ -323,7 +323,14 @@ public:
   /// Returns the token's type, e.g. whether "<" is a template opener or
   /// binary operator.
   TokenType getType() const { return Type; }
-  void setType(TokenType T) { Type = T; }
+  void setType(TokenType T) {
+    // If this token is a macro argument while formatting an unexpanded macro
+    // call, we do not change its type any more - the type was deduced from
+    // formatting the expanded macro stream already.
+    if (MacroCtx && MacroCtx->Role == MR_UnexpandedArg)
+      return;
+    Type = T;
+  }
 
   /// The number of newlines immediately before the \c Token.
   ///

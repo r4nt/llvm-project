@@ -52,21 +52,33 @@ public:
     // left them in a different state.
     First->Previous = nullptr;
     FormatToken *Current = First;
+    addChildren(Line.Tokens.front(), Current);
     for (std::list<UnwrappedLineNode>::const_iterator I = ++Line.Tokens.begin(),
                                                       E = Line.Tokens.end();
          I != E; ++I) {
       const UnwrappedLineNode &Node = *I;
+      if (Node.Tok->MacroParent)
+        ContainsMacroUnexpansion = true;
       Current->Next = I->Tok;
       I->Tok->Previous = Current;
       Current = Current->Next;
-      Current->Children.clear();
-      for (const auto &Child : Node.Children) {
-        Children.push_back(new AnnotatedLine(Child));
-        Current->Children.push_back(Children.back());
-      }
+      addChildren(Node, Current);
+      // FIXME: if we add children, previous will point to the token before
+      // the children; changing this requires significant changes across
+      // clang-format.
     }
     Last = Current;
     Last->Next = nullptr;
+  }
+
+  void addChildren(const UnwrappedLineNode &Node, FormatToken *Current) {
+    Current->Children.clear();
+    for (const auto &Child : Node.Children) {
+      Children.push_back(new AnnotatedLine(Child));
+      if (Children.back()->ContainsMacroUnexpansion)
+        ContainsMacroUnexpansion = true;
+      Current->Children.push_back(Children.back());
+    }
   }
 
   ~AnnotatedLine() {
@@ -132,6 +144,7 @@ public:
   bool MustBeDeclaration;
   bool MightBeFunctionDecl;
   bool IsMultiVariableDeclStmt;
+  bool ContainsMacroUnexpansion = false;
 
   /// \c True if this line should be formatted, i.e. intersects directly or
   /// indirectly with one of the input ranges.

@@ -1765,6 +1765,8 @@ struct FormatStyle {
   /// A regular expression matching macros that end a block.
   std::string MacroBlockEnd;
 
+  std::vector<std::string> Macros;
+
   /// The maximum number of consecutive empty lines to keep.
   /// \code
   ///    MaxEmptyLinesToKeep: 1         vs.     MaxEmptyLinesToKeep: 0
@@ -2518,7 +2520,8 @@ struct FormatStyle {
            BitFieldColonSpacing == R.BitFieldColonSpacing &&
            Standard == R.Standard && TabWidth == R.TabWidth &&
            StatementMacros == R.StatementMacros && UseTab == R.UseTab &&
-           UseCRLF == R.UseCRLF && TypenameMacros == R.TypenameMacros;
+           UseCRLF == R.UseCRLF && TypenameMacros == R.TypenameMacros &&
+           Macros == R.Macros;
   }
 
   llvm::Optional<FormatStyle> GetLanguageStyle(LanguageKind Language) const;

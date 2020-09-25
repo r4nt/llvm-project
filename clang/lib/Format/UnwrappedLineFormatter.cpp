@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "UnwrappedLineFormatter.h"
+#include "FormatToken.h"
 #include "NamespaceEndCommentsFixer.h"
 #include "WhitespaceManager.h"
 #include "llvm/Support/Debug.h"
@@ -710,9 +711,12 @@ private:
 
 static void markFinalized(FormatToken *Tok) {
   for (; Tok; Tok = Tok->Next) {
-    Tok->Finalized = true;
-    for (AnnotatedLine *Child : Tok->Children)
-      markFinalized(Child->First);
+    if (Tok->MacroCtx && Tok->MacroCtx->Role == MR_ExpandedArg) {
+      Tok->MacroCtx->Role = MR_UnexpandedArg;
+      Tok->SpacesRequiredBefore = 0;
+    } else {
+      Tok->Finalized = true;
+    }
   }
 }
 
@@ -767,14 +771,16 @@ protected:
   bool formatChildren(LineState &State, bool NewLine, bool DryRun,
                       unsigned &Penalty) {
     const FormatToken *LBrace = State.NextToken->getPreviousNonComment();
+    bool HasLBrace = LBrace && LBrace->is(tok::l_brace) && LBrace->is(BK_Block);
     FormatToken &Previous = *State.NextToken->Previous;
-    if (!LBrace || LBrace->isNot(tok::l_brace) || LBrace->isNot(BK_Block) ||
-        Previous.Children.size() == 0)
+    if (Previous.Children.size() == 0 || (!HasLBrace && !LBrace->MacroParent))
       // The previous token does not open a block. Nothing to do. We don't
       // assert so that we can simply call this function for all tokens.
       return true;
 
-    if (NewLine) {
+    if (NewLine || Previous.MacroParent) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Formatting children of " << Previous.TokenText << "\n");
       int AdditionalIndent = State.Stack.back().Indent -
                              Previous.Children[0]->Level * Style.IndentWidth;
 
@@ -783,6 +789,8 @@ protected:
                                  /*FixBadIndentation=*/true);
       return true;
     }
+    LLVM_DEBUG(llvm::dbgs() << "Formatting children of " << Previous.TokenText
+                            << " in a single line.\n");
 
     if (Previous.Children[0]->First->MustBreakBefore)
       return false;
@@ -800,8 +808,8 @@ protected:
     if (Child->Last->isTrailingComment())
       return false;
 
-    // If the child line exceeds the column limit, we wouldn't want to merge it.
-    // We add +2 for the trailing " }".
+    // If the child line exceeds the column limit, we wouldn't want to merge
+    // it. We add +2 for the trailing " }".
     if (Style.ColumnLimit > 0 &&
         Child->Last->TotalLength + State.Column + 2 > Style.ColumnLimit)
       return false;
@@ -1011,15 +1019,31 @@ private:
   /// penalty of \p Penalty. Insert a line break if \p NewLine is \c true.
   void addNextStateToQueue(unsigned Penalty, StateNode *PreviousNode,
                            bool NewLine, unsigned *Count, QueueType *Queue) {
-    if (NewLine && !Indenter->canBreak(PreviousNode->State))
+    if (NewLine && !Indenter->canBreak(PreviousNode->State)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Not adding newline state because we cannot break before: "
+                 << PreviousNode->State.NextToken->TokenText << "\n");
       return;
-    if (!NewLine && Indenter->mustBreak(PreviousNode->State))
+    }
+    if (!NewLine && Indenter->mustBreak(PreviousNode->State)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Not adding !newline state because we must break before: "
+                 << PreviousNode->State.NextToken->TokenText << "\n");
       return;
+    }
 
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
-    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty))
+    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Formatting children failed! NewLine: " << NewLine
+                 << ", canBreak: " << Indenter->canBreak(PreviousNode->State)
+                 << ", mustBreak: " << Indenter->mustBreak(PreviousNode->State)
+                 << ", Token: " << Node->State.NextToken->TokenText
+                 << ", Parent: " << Node->State.NextToken->Previous->TokenText
+                 << "\n");
       return;
+    }
 
     Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
 
@@ -1119,12 +1143,13 @@ unsigned UnwrappedLineFormatter::format(
       NextLine = Joiner.getNextMergedLine(DryRun, IndentTracker);
       unsigned ColumnLimit = getColumnLimit(TheLine.InPPDirective, NextLine);
       bool FitsIntoOneLine =
-          TheLine.Last->TotalLength + Indent <= ColumnLimit ||
-          (TheLine.Type == LT_ImportStatement &&
-           (Style.Language != FormatStyle::LK_JavaScript ||
-            !Style.JavaScriptWrapImports)) ||
-          (Style.isCSharp() &&
-           TheLine.InPPDirective); // don't split #regions in C#
+          !TheLine.ContainsMacroUnexpansion &&
+          (TheLine.Last->TotalLength + Indent <= ColumnLimit ||
+           (TheLine.Type == LT_ImportStatement &&
+            (Style.Language != FormatStyle::LK_JavaScript ||
+             !Style.JavaScriptWrapImports)) ||
+           (Style.isCSharp() &&
+            TheLine.InPPDirective)); // don't split #regions in C#
       if (Style.ColumnLimit == 0)
         NoColumnLimitLineFormatter(Indenter, Whitespaces, Style, this)
             .formatLine(TheLine, NextStartColumn + Indent,

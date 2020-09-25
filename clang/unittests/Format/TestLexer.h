@@ -73,8 +73,10 @@ public:
 
   TokenList annotate(llvm::StringRef Code) {
     FormatTokenLexer Lex = getNewLexer(Code);
-    auto Tokens = Lex.lex();
-    UnwrappedLineParser Parser(Style, Lex.getKeywords(), 0, Tokens, *this);
+    auto Toks = Lex.lex();
+    SmallVector<FormatToken *, 10> Tokens(Toks.begin(), Toks.end());
+    UnwrappedLineParser Parser(SourceMgr.get(), Style, Lex.getKeywords(), 0,
+                               Tokens, *this, Allocator, IdentTable);
     Parser.parse();
     TokenAnnotator Annotator(Style, Lex.getKeywords());
     for (auto &Line : UnwrappedLines) {

@@ -15,9 +15,13 @@
 #ifndef LLVM_CLANG_LIB_FORMAT_UNWRAPPEDLINEPARSER_H
 #define LLVM_CLANG_LIB_FORMAT_UNWRAPPEDLINEPARSER_H
 
+#include "Encoding.h"
 #include "FormatToken.h"
+#include "Macros.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Format/Format.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/Regex.h"
 #include <list>
 #include <stack>
@@ -58,6 +62,11 @@ struct UnwrappedLine {
   /// line with the corresponding closing brace.
   size_t MatchingClosingBlockLineIndex = kInvalidIndex;
 
+  void resetIndexes() {
+    MatchingOpeningBlockLineIndex = kInvalidIndex;
+    MatchingClosingBlockLineIndex = kInvalidIndex;
+  }
+
   static const size_t kInvalidIndex = -1;
 
   unsigned FirstStartColumn = 0;
@@ -71,13 +80,18 @@ public:
 };
 
 class FormatTokenSource;
+class MacroUnexpander;
 
 class UnwrappedLineParser {
 public:
-  UnwrappedLineParser(const FormatStyle &Style,
+  UnwrappedLineParser(SourceManager &SourceMgr, const FormatStyle &Style,
                       const AdditionalKeywords &Keywords,
-                      unsigned FirstStartColumn, ArrayRef<FormatToken *> Tokens,
-                      UnwrappedLineConsumer &Callback);
+                      unsigned FirstStartColumn,
+                      SmallVectorImpl<FormatToken *> &Tokens,
+                      UnwrappedLineConsumer &Callback,
+                      llvm::SpecificBumpPtrAllocator<FormatToken> &Allocator,
+                      IdentifierTable &IdentTable);
+  ~UnwrappedLineParser();
 
   void parse();
 
@@ -136,6 +150,7 @@ private:
   bool tryToParsePropertyAccessor();
   void tryToParseJSFunction();
   bool tryToParseSimpleAttribute();
+  llvm::SmallVector<llvm::SmallVector<FormatToken *, 8>, 1> parseMacroCall();
   void addUnwrappedLine();
   bool eof() const;
   // LevelDifference is the difference of levels after and before the current
@@ -174,6 +189,8 @@ private:
 
   bool isOnNewLine(const FormatToken &FormatTok);
 
+  bool containsExpansion(const UnwrappedLine &Line);
+
   // Compute hash of the current preprocessor branch.
   // This is used to identify the different branches, and thus track if block
   // open and close in the same branch.
@@ -183,6 +200,11 @@ private:
   // subtracted from beyond 0. Introduce a method to subtract from Line.Level
   // and use that everywhere in the Parser.
   std::unique_ptr<UnwrappedLine> Line;
+
+  SmallVector<UnwrappedLine, 8> ExpandedLines;
+  std::map<FormatToken *, std::unique_ptr<UnwrappedLine>> Unexpanded;
+  bool InExpansion = false;
+  std::unique_ptr<MacroUnexpander> Unexpand;
 
   // Comments are sorted into unwrapped lines by whether they are in the same
   // line as the previous token, or not. If not, they belong to the next token.
@@ -221,7 +243,9 @@ private:
   // FIXME: This is a temporary measure until we have reworked the ownership
   // of the format tokens. The goal is to have the actual tokens created and
   // owned outside of and handed into the UnwrappedLineParser.
-  ArrayRef<FormatToken *> AllTokens;
+  // FIXME: The above fixme doesn't work if we need to create tokens while
+  // parsing.
+  SmallVectorImpl<FormatToken *> &AllTokens;
 
   // Represents preprocessor branch type, so we can find matching
   // #if/#else/#endif directives.
@@ -282,13 +306,17 @@ private:
   // does not start at the beginning of the file.
   unsigned FirstStartColumn;
 
+  MacroExpander Macros;
+
   friend class ScopedLineState;
   friend class CompoundStatementIndenter;
 };
 
 struct UnwrappedLineNode {
   UnwrappedLineNode() : Tok(nullptr) {}
-  UnwrappedLineNode(FormatToken *Tok) : Tok(Tok) {}
+  UnwrappedLineNode(FormatToken *Tok,
+                    llvm::ArrayRef<UnwrappedLine> Children = {})
+      : Tok(Tok), Children(Children.begin(), Children.end()) {}
 
   FormatToken *Tok;
   SmallVector<UnwrappedLine, 0> Children;
@@ -297,6 +325,8 @@ struct UnwrappedLineNode {
 inline UnwrappedLine::UnwrappedLine()
     : Level(0), InPPDirective(false), MustBeDeclaration(false),
       MatchingOpeningBlockLineIndex(kInvalidIndex) {}
+
+std::ostream &operator<<(std::ostream &OS, const UnwrappedLine &Line);
 
 } // end namespace format
 } // end namespace clang

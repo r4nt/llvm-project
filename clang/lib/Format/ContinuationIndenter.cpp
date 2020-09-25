@@ -17,6 +17,7 @@
 #include "WhitespaceManager.h"
 #include "clang/Basic/OperatorPrecedence.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/TokenKinds.h"
 #include "clang/Format/Format.h"
 #include "llvm/Support/Debug.h"
 
@@ -278,6 +279,12 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   const FormatToken &Current = *State.NextToken;
   const FormatToken &Previous = *Current.Previous;
   assert(&Previous == Current.Previous);
+
+  // We can always break before a macro argument to underline the structure
+  // of the expanded code.
+  if (!Previous.Children.empty() && Previous.MacroParent)
+    return true;
+
   if (!Current.CanBreakBefore && !(State.Stack.back().BreakBeforeClosingBrace &&
                                    Current.closesBlockOrBlockTypeList(Style)))
     return false;
@@ -513,7 +520,6 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
 
   if (Previous.is(TT_BlockComment) && Previous.IsMultiline)
     return true;
-
   if (State.NoContinuation)
     return true;
 
@@ -645,9 +651,15 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
   if (Previous.is(TT_TemplateString) && Previous.opensScope())
     State.Stack.back().NoLineBreak = true;
 
+  // Align following lines within parenthesis / brackets if configured.
+  // For a line of macro parents, the commas that follow the opening parenthesis
+  // in the line come after the opening parenthesis' children - we want to align
+  // the comma with the previous token's children instead of the opening
+  // parenthesis.
   if (Style.AlignAfterOpenBracket != FormatStyle::BAS_DontAlign &&
       !State.Stack.back().IsCSharpGenericTypeConstraint &&
       Previous.opensScope() && Previous.isNot(TT_ObjCMethodExpr) &&
+      !(Current.MacroParent && Previous.MacroParent) &&
       (Current.isNot(TT_LineComment) || Previous.is(BK_BracedInit))) {
     State.Stack.back().Indent = State.Column + Spaces;
     State.Stack.back().IsAligned = true;
