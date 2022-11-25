@@ -985,6 +985,7 @@ template <> struct MappingTraits<FormatStyle> {
     IO.mapOptional("UseTab", Style.UseTab);
     IO.mapOptional("WhitespaceSensitiveMacros",
                    Style.WhitespaceSensitiveMacros);
+    IO.mapOptional("Macros", Style.Macros);
 
     // If AlwaysBreakAfterDefinitionReturnType was specified but
     // AlwaysBreakAfterReturnType was not, initialize the latter from the
