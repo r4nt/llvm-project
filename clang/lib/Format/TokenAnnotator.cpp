@@ -4177,6 +4177,8 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
       (Left.Children.empty() || !Left.MacroParent)) {
     return true;
   }
+  //if (Right.is(TT_OverloadedOperatorLParen))
+  //  return spaceRequiredBeforeParens(Right);
   if (Right.is(tok::comma))
     return false;
   if (Right.is(TT_ObjCBlockLParen))
