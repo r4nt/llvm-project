@@ -365,6 +365,8 @@ inline UnwrappedLine::UnwrappedLine()
       InMacroBody(false), MustBeDeclaration(false),
       MatchingOpeningBlockLineIndex(kInvalidIndex) {}
 
+std::ostream &operator<<(std::ostream &OS, const UnwrappedLine &Line);
+
 } // end namespace format
 } // end namespace clang
 
