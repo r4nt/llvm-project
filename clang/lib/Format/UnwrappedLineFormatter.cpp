@@ -988,8 +988,9 @@ protected:
     }
 
     if (NewLine || Previous.MacroParent) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Formatting children of " << Previous.TokenText << "\n");
       const ParenState &P = State.Stack.back();
-
       int AdditionalIndent =
           P.Indent - Previous.Children[0]->Level * Style.IndentWidth;
 
@@ -1008,6 +1009,8 @@ protected:
                                  /*FixBadIndentation=*/true);
       return true;
     }
+    LLVM_DEBUG(llvm::dbgs() << "Formatting children of " << Previous.TokenText
+                            << " in a single line.\n");
 
     if (Previous.Children[0]->First->MustBreakBefore)
       return false;
@@ -1242,15 +1245,31 @@ private:
   /// penalty of \p Penalty. Insert a line break if \p NewLine is \c true.
   void addNextStateToQueue(unsigned Penalty, StateNode *PreviousNode,
                            bool NewLine, unsigned *Count, QueueType *Queue) {
-    if (NewLine && !Indenter->canBreak(PreviousNode->State))
+    if (NewLine && !Indenter->canBreak(PreviousNode->State)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Not adding newline state because we cannot break before: "
+                 << PreviousNode->State.NextToken->TokenText << "\n");
       return;
-    if (!NewLine && Indenter->mustBreak(PreviousNode->State))
+    }
+    if (!NewLine && Indenter->mustBreak(PreviousNode->State)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Not adding !newline state because we must break before: "
+                 << PreviousNode->State.NextToken->TokenText << "\n");
       return;
+    }
 
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
-    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty))
+    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Formatting children failed! NewLine: " << NewLine
+                 << ", canBreak: " << Indenter->canBreak(PreviousNode->State)
+                 << ", mustBreak: " << Indenter->mustBreak(PreviousNode->State)
+                 << ", Token: " << Node->State.NextToken->TokenText
+                 << ", Parent: " << Node->State.NextToken->Previous->TokenText
+                 << "\n");
       return;
+    }
 
     Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
 
