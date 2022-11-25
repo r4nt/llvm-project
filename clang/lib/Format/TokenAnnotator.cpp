@@ -2537,6 +2537,13 @@ public:
       // Consume operators with higher precedence.
       parse(Precedence + 1);
 
+      // Do not assign fake parenthesis to tokens that are part of an
+      // unexpanded macro call. The line within the macro call contains
+      // the parenthesis and commas, and we will not find operators within
+      // that structure.
+      if (Current && Current->MacroParent)
+        break;
+
       int CurrentPrecedence = getCurrentPrecedence();
 
       if (Precedence == CurrentPrecedence && Current &&
@@ -4164,8 +4171,12 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
       Left.isOneOf(TT_TrailingReturnArrow, TT_LambdaArrow)) {
     return true;
   }
-  if (Left.is(tok::comma) && !Right.is(TT_OverloadedOperatorLParen))
+  if (Left.is(tok::comma) && !Right.is(TT_OverloadedOperatorLParen) &&
+      // In an unexpanded macro call we only find the parentheses and commas
+      // in a line; the commas and closing parenthesis do not require a space.
+      (Left.Children.empty() || !Left.MacroParent)) {
     return true;
+  }
   if (Right.is(tok::comma))
     return false;
   if (Right.is(TT_ObjCBlockLParen))

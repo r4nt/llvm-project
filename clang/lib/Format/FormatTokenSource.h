@@ -1,4 +1,3 @@
-
 //===--- FormatTokenSource.h - Format C++ code ------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -8,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// This file defines the \c TokenSource interface, which provides a token
+/// This file defines the \c FormatTokenSource interface, which provides a token
 /// stream as well as the ability to manipulate the token stream.
 ///
 //===----------------------------------------------------------------------===//
@@ -24,6 +23,11 @@
 namespace clang {
 namespace format {
 
+
+// Navigate a token stream.
+//
+// Enables traversal of a token stream, resetting the position in a token
+// stream, as well as inserting new tokens.
 class FormatTokenSource {
 public:
   virtual ~FormatTokenSource() {}
@@ -50,11 +54,25 @@ public:
   // Resets the token stream to the state it was in when getPosition() returned
   // Position, and return the token at that position in the stream.
   virtual FormatToken *setPosition(unsigned Position) = 0;
+
+  // Insert the given tokens before the current position.
+  // Returns the first token in \c Tokens.
+  // The next returned token will be the second token in \c Tokens.
+  // Requires the last token in Tokens to be EOF; once the EOF token is reached,
+  // the next token will be the last token returned by getNextToken();
+  //
+  // For example, given the token sequence 'a1 a2':
+  // getNextToken() -> a1
+  // insertTokens('b1 b2') -> b1
+  // getNextToken() -> b2
+  // getNextToken() -> a1
+  // getNextToken() -> a2
+  virtual FormatToken *insertTokens(ArrayRef<FormatToken *> Tokens) = 0;
 };
 
 class LLVM_GSL_POINTER IndexedTokenSource : public FormatTokenSource {
 public:
-  IndexedTokenSource(ArrayRef<FormatToken *> Tokens)
+  IndexedTokenSource(SmallVectorImpl<FormatToken *> &Tokens)
       : Tokens(Tokens), Position(-1) {}
 
   FormatToken *getNextToken() override {
@@ -65,7 +83,7 @@ public:
       });
       return Tokens[Position];
     }
-    ++Position;
+    Position = next(Position);
     LLVM_DEBUG({
       llvm::dbgs() << "Next ";
       dbgToken(Position);
@@ -80,10 +98,11 @@ public:
   FormatToken *peekNextToken(bool SkipComment = false) override {
     if (isEOF())
       return Tokens[Position];
-    int Next = Position + 1;
-    if (SkipComment)
-      while (Tokens[Next]->is(tok::comment))
-        ++Next;
+    int Next = next(Position);
+    if (SkipComment) {
+      while(Tokens[Next]->is(tok::comment))
+        Next = next(Next);
+    }
     LLVM_DEBUG({
       llvm::dbgs() << "Peeking ";
       dbgToken(Next);
@@ -107,9 +126,40 @@ public:
     return Tokens[Position];
   }
 
-  void reset() { Position = -1; }
+  FormatToken *insertTokens(ArrayRef<FormatToken *> New) override {
+    assert(Position != -1);
+    assert((*New.rbegin())->Tok.is(tok::eof));
+    LLVM_DEBUG(llvm::dbgs() << "Inserting:\n");
+    int Next = Tokens.size();
+    Tokens.append(New.begin(), New.end());
+    LLVM_DEBUG({
+      for (int I = Next, E = Tokens.size(); I != E; ++I) {
+        dbgToken(I, "  ");
+      }
+      llvm::dbgs() << "  Jump from: " << (Tokens.size() - 1) << " -> "
+                   << Position << "\n";
+    });
+    Jumps[Tokens.size() - 1] = Position;
+    Position = Next;
+    LLVM_DEBUG({
+      llvm::dbgs() << "At inserted token ";
+      dbgToken(Position);
+    });
+    return Tokens[Position];
+  }
 
+  void reset() { Position = -1; }
 private:
+  int next(int Current) {
+    int Next = Current + 1;
+    auto it = Jumps.find(Next);
+    if (it != Jumps.end()) {
+      Next = it->second;
+      assert(Jumps.find(Next) == Jumps.end());
+    }
+    return Next;
+  }
+
   void dbgToken(int Position, llvm::StringRef Indent = "") {
     FormatToken *Tok = Tokens[Position];
     llvm::dbgs() << Indent << "[" << Position
@@ -117,8 +167,12 @@ private:
                  << ", Macro: " << !!Tok->MacroCtx << "\n";
   }
 
-  ArrayRef<FormatToken *> Tokens;
+  SmallVectorImpl<FormatToken *> &Tokens;
   int Position;
+
+  // Maps from position a to position b, so that when we reach a, the token
+  // stream continues at position b instead.
+  std::map<int, int> Jumps;
 };
 
 class ScopedMacroState : public FormatTokenSource {
@@ -173,6 +227,10 @@ public:
     PreviousToken = nullptr;
     Token = PreviousTokenSource->setPosition(Position);
     return Token;
+  }
+
+  FormatToken *insertTokens(ArrayRef<FormatToken *> Tokens) override {
+    assert(false && "Cannot insert tokens while parsing a macro.");
   }
 
 private:

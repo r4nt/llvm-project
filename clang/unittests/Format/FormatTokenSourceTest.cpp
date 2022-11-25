@@ -30,6 +30,12 @@ protected:
     FormatToken *Tok = FormatTok;                                              \
     EXPECT_EQ((Tok)->Tok.getKind(), Kind) << *(Tok);                           \
   } while (false);
+#define EXPECT_TOKEN_ID(FormatTok, Name)                                       \
+  do {                                                                         \
+    FormatToken *Tok = FormatTok;                                              \
+    EXPECT_EQ((Tok)->Tok.getKind(), tok::identifier) << *(Tok);                \
+    EXPECT_EQ((Tok)->TokenText, Name) << *(Tok);                               \
+  } while (false);
 
 TEST_F(IndexedTokenSourceTest, EmptyInput) {
   TokenList Tokens = lex("");
@@ -60,6 +66,8 @@ TEST_F(IndexedTokenSourceTest, NavigateTokenStream) {
   EXPECT_TOKEN_KIND(Source.peekNextToken(), tok::eof);
   EXPECT_TOKEN_KIND(Source.getNextToken(), tok::eof);
   EXPECT_TOKEN_KIND(Source.getPreviousToken(), tok::semi);
+  EXPECT_TOKEN_KIND(Source.getNextToken(), tok::eof);
+  EXPECT_TOKEN_KIND(Source.getPreviousToken(), tok::semi);
 }
 
 TEST_F(IndexedTokenSourceTest, ResetPosition) {
@@ -71,6 +79,62 @@ TEST_F(IndexedTokenSourceTest, ResetPosition) {
   Source.getNextToken();
   EXPECT_TOKEN_KIND(Source.getNextToken(), tok::eof);
   EXPECT_TOKEN_KIND(Source.setPosition(Position), tok::kw_int);
+}
+
+TEST_F(IndexedTokenSourceTest, InsertTokens) {
+  TokenList TokensA = lex("A1 A2");
+  TokenList TokensB = lex("B1 B2");
+  IndexedTokenSource Source(TokensA);
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensB), "B1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "B2");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A2");
+}
+
+TEST_F(IndexedTokenSourceTest, InsertTokensAtEOF) {
+  TokenList TokensA = lex("A1");
+  TokenList TokensB = lex("B1 B2");
+  IndexedTokenSource Source(TokensA);
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+  EXPECT_TOKEN_KIND(Source.getNextToken(), tok::eof);
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensB), "B1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "B2");
+  EXPECT_TOKEN_KIND(Source.getNextToken(), tok::eof);
+}
+
+TEST_F(IndexedTokenSourceTest, InsertTokensRecursive) {
+  TokenList TokensA = lex("A1");
+  TokenList TokensB = lex("B1");
+  TokenList TokensC = lex("C1");
+  TokenList TokensD = lex("D1");
+  IndexedTokenSource Source(TokensA);
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+  // A1
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensB), "B1");
+  // B1 A1
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensC), "C1");
+  // C1 B1 A1
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensD), "D1");
+  // D1 C1 B1 A1
+  EXPECT_TOKEN_ID(Source.getNextToken(), "C1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "B1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+}
+
+TEST_F(IndexedTokenSourceTest, InsertTokensRecursiveAtEndOfSequence) {
+  TokenList TokensA = lex("A1");
+  TokenList TokensB = lex("B1");
+  TokenList TokensC = lex("C1");
+  TokenList TokensD = lex("D1");
+  IndexedTokenSource Source(TokensA);
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensB), "B1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensC), "C1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
+  EXPECT_TOKEN_ID(Source.insertTokens(TokensD), "D1");
+  EXPECT_TOKEN_ID(Source.getNextToken(), "A1");
 }
 
 } // namespace

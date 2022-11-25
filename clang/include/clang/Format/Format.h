@@ -2745,6 +2745,23 @@ struct FormatStyle {
   /// \version 3.7
   std::string MacroBlockEnd;
 
+  /// A list of macros of the form \c <definition>=<expansion> .
+  ///
+  /// Code will be parsed with macros expanded, and formatting will try to best
+  /// match the structure of the expanded call.
+  ///
+  /// For example, with the macro "A(x)=x", the code
+  /// \code
+  ///    A(a * b);
+  /// \endcode
+  /// will be formatted as a declaration of the variable \c b of type \c A*
+  /// (depending on pointer-binding rules)
+  /// \code
+  ///    A(a* b);
+  /// \endcode
+  /// instead of as multiplication.
+  std::vector<std::string> Macros;
+
   /// The maximum number of consecutive empty lines to keep.
   /// \code
   ///    MaxEmptyLinesToKeep: 1         vs.     MaxEmptyLinesToKeep: 0
@@ -4291,7 +4308,8 @@ struct FormatStyle {
            StatementAttributeLikeMacros == R.StatementAttributeLikeMacros &&
            StatementMacros == R.StatementMacros && TabWidth == R.TabWidth &&
            TypenameMacros == R.TypenameMacros && UseTab == R.UseTab &&
-           WhitespaceSensitiveMacros == R.WhitespaceSensitiveMacros;
+           WhitespaceSensitiveMacros == R.WhitespaceSensitiveMacros &&
+           Macros == R.Macros;
   }
 
   std::optional<FormatStyle> GetLanguageStyle(LanguageKind Language) const;

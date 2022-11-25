@@ -66,7 +66,8 @@ protected:
 
   void _verifyFormat(const char *File, int Line, llvm::StringRef Expected,
                      llvm::StringRef Code,
-                     const FormatStyle &Style = getLLVMStyle()) {
+                     const FormatStyle &Style = getLLVMStyle(),
+                     bool MessUp = true) {
     ScopedTrace t(File, Line, ::testing::Message() << Code.str());
     EXPECT_EQ(Expected.str(), format(Expected, Style))
         << "Expected code is not stable";
@@ -76,20 +77,24 @@ protected:
       // needs to be checked for Objective-C++ as well.
       FormatStyle ObjCStyle = Style;
       ObjCStyle.Language = FormatStyle::LK_ObjC;
-      EXPECT_EQ(Expected.str(), format(test::messUp(Code), ObjCStyle));
+      EXPECT_EQ(Expected.str(),
+                format(MessUp ? test::messUp(Code) : Code, ObjCStyle));
     }
   }
 
   void _verifyFormat(const char *File, int Line, llvm::StringRef Code,
-                     const FormatStyle &Style = getLLVMStyle()) {
-    _verifyFormat(File, Line, Code, test::messUp(Code), Style);
+                     const FormatStyle &Style = getLLVMStyle(),
+                     bool MessUp = true) {
+    _verifyFormat(File, Line, Code, MessUp ? test::messUp(Code) : Code, Style,
+                  MessUp);
   }
 
   void _verifyIncompleteFormat(const char *File, int Line, llvm::StringRef Code,
-                               const FormatStyle &Style = getLLVMStyle()) {
+                               const FormatStyle &Style = getLLVMStyle(),
+                               bool MessUp = true) {
     ScopedTrace t(File, Line, ::testing::Message() << Code.str());
-    EXPECT_EQ(Code.str(),
-              format(test::messUp(Code), Style, SC_ExpectIncomplete));
+    EXPECT_EQ(Code.str(), format(MessUp ? test::messUp(Code) : Code, Style,
+                                 SC_ExpectIncomplete));
   }
 
   void _verifyIndependentOfContext(const char *File, int Line,
@@ -22464,6 +22469,186 @@ TEST_F(FormatTest, MergeLessLessAtEnd) {
                "aaallvm::outs() <<");
   verifyFormat("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                "aaaallvm::outs()\n    <<");
+}
+
+TEST_F(FormatTest, UnexpandConfiguredMacros) {
+  FormatStyle Style = getLLVMStyle();
+  Style.Macros.push_back("CLASS=class C {");
+  Style.Macros.push_back("SEMI=;");
+  Style.Macros.push_back("STMT=f();");
+  Style.Macros.push_back("ID(x)=x");
+  Style.Macros.push_back("ID3(x, y, z)=x y z");
+  Style.Macros.push_back("CALL(x)=f([] { x })");
+  Style.Macros.push_back("ASSIGN_OR_RETURN(a, b, c)=a = (b) || (c)");
+
+  verifyFormat("ID(nested(a(b, c), d))", Style);
+  verifyFormat("CLASS\n"
+               "  a *b;\n"
+               "};",
+               Style);
+  verifyFormat("SEMI\n"
+               "SEMI\n"
+               "SEMI",
+               Style);
+  verifyFormat("STMT\n"
+               "STMT\n"
+               "STMT",
+               Style);
+  verifyFormat("void f() { ID(a *b); }", Style);
+  verifyFormat(R"(ID(
+    { ID(a *b); });
+)",
+               Style);
+  verifyIncompleteFormat(R"(ID3({, ID(a *b),
+  ;
+  });
+)", Style);
+
+  verifyFormat("ID(CALL(CALL(return a * b;)));", Style);
+
+  verifyFormat("ASSIGN_OR_RETURN(MySomewhatLongType *variable,\n"
+               "                 MySomewhatLongFunction(SomethingElse()));\n",
+               Style);
+
+  verifyFormat(R"(
+#define MACRO(a, b) ID(a + b)
+)",
+               Style);
+  EXPECT_EQ(R"(
+int a;
+int b;
+int c;
+int d;
+int e;
+int f;
+ID(
+    namespace foo {
+    int a;
+    }
+) // namespace k
+)",
+            format(R"(
+int a;
+int b;
+int c;
+int d;
+int e;
+int f;
+ID(namespace foo { int a; })  // namespace k
+)",
+                   Style));
+  verifyFormat(R"(ID(
+    //
+    ({ ; }))
+)",
+               Style);
+
+  Style.ColumnLimit = 35;
+  // FIXME: Arbitrary formatting of macros where the end of the logical
+  // line is in the middle of a macro call are not working yet.
+  verifyFormat(R"(ID(
+    void f();
+    void)
+ID(g) ID(()) ID(
+    ;
+    void g();)
+)",
+               Style);
+
+  Style.ColumnLimit = 10;
+  verifyFormat("STMT\n"
+               "STMT\n"
+               "STMT",
+               Style);
+
+  EXPECT_EQ(R"(
+ID(CALL(CALL(
+    a *b)));
+)",
+            format(R"(
+ID(CALL(CALL(a * b)));
+)",
+                   Style));
+
+  // FIXME: If we want to support unbalanced braces or parens from macro
+  // expansions we need to re-think how we propagate errors in
+  // TokenAnnotator::parseLine; for investigation, switching the inner loop of
+  // TokenAnnotator::parseLine to return LT_Other instead of LT_Invalid in case
+  // of !consumeToken() changes the formatting of the test below and makes it
+  // believe it has a fully correct formatting.
+  EXPECT_EQ(R"(
+ID3(
+    {
+    CLASS
+    a *b;
+    };
+    },
+    ID(x *y);
+    ,
+    STMT
+    STMT
+    STMT)
+void f();
+)",
+            format(R"(
+ID3({CLASS a*b; };}, ID(x*y);, STMT STMT STMT)
+void f();
+)",
+                   Style));
+
+  verifyFormat("ID(a(\n"
+               "#ifdef A\n"
+               "    b, c\n"
+               "#else\n"
+               "    d(e)\n"
+               "#endif\n"
+               "    ))",
+               Style);
+  Style.ColumnLimit = 80;
+  verifyFormat(R"(ASSIGN_OR_RETURN(
+    // Comment
+    a b, c);
+)",
+               Style);
+  Style.ColumnLimit = 30;
+  verifyFormat(R"(ASSIGN_OR_RETURN(
+    // Comment
+    //
+    a b,
+    xxxxxxxxxxxx(
+        yyyyyyyyyyyyyyyyy,
+        zzzzzzzzzzzzzzzzzz),
+    f([]() {
+      a();
+      b();
+    }));
+)",
+               Style);
+  verifyFormat(R"(int a = []() {
+  ID(
+      x;
+      y;
+      z;)
+  ;
+}();
+)",
+               Style);
+  verifyIncompleteFormat(R"(ASSIGN_OR_RETURN((
+====
+#))
+})", Style, /*MessUp=*/false);
+   verifyIncompleteFormat(R"(ASSIGN_OR_RETURN(
+}
+(
+====
+#),
+a))", Style, /*MessUp=*/false);
+  verifyFormat(R"(ASSIGN_OR_RETURN(a
+//
+====
+#
+                 <))",
+               Style, /*MessUp=*/false);
 }
 
 TEST_F(FormatTest, HandleUnbalancedImplicitBracesAcrossPPBranches) {
