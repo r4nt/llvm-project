@@ -366,6 +366,11 @@ public:
   /// binary operator.
   TokenType getType() const { return Type; }
   void setType(TokenType T) {
+    // If this token is a macro argument while formatting an unexpanded macro
+    // call, we do not change its type any more - the type was deduced from
+    // formatting the expanded macro stream already.
+    if (MacroCtx && MacroCtx->Role == MR_UnexpandedArg)
+      return;
     assert((!TypeIsFinalized || T == Type) &&
            "Please use overwriteFixedType to change a fixed type.");
     Type = T;
@@ -1801,6 +1806,25 @@ private:
   /// The Verilog keywords beyond the C++ keyword set.
   std::unordered_set<IdentifierInfo *> VerilogExtraKeywords;
 };
+
+inline bool isLineComment(const FormatToken &FormatTok) {
+  return FormatTok.is(tok::comment) && !FormatTok.TokenText.startswith("/*");
+}
+
+// Checks if \p FormatTok is a line comment that continues the line comment
+// \p Previous. The original column of \p MinColumnToken is used to determine
+// whether \p FormatTok is indented enough to the right to continue \p Previous.
+inline bool continuesLineComment(const FormatToken &FormatTok,
+                                 const FormatToken *Previous,
+                                 const FormatToken *MinColumnToken) {
+  if (!Previous || !MinColumnToken)
+    return false;
+  unsigned MinContinueColumn =
+      MinColumnToken->OriginalColumn + (isLineComment(*MinColumnToken) ? 0 : 1);
+  return isLineComment(FormatTok) && FormatTok.NewlinesBefore == 1 &&
+         isLineComment(*Previous) &&
+         FormatTok.OriginalColumn >= MinContinueColumn;
+}
 
 } // namespace format
 } // namespace clang
