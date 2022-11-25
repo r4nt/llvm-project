@@ -219,7 +219,7 @@ void MacroCallReconstructor::reconstruct(FormatToken *Token) {
       reconstructActiveCallUntil(Token);
   }
   assert(!ActiveExpansions.empty());
-  if (ActiveExpansions.back().SpelledI != ActiveExpansions.back().SpelledE) {
+  if (!ActiveExpansions.empty() && ActiveExpansions.back().SpelledI != ActiveExpansions.back().SpelledE) {
     assert(ActiveExpansions.size() == Token->MacroCtx->ExpandedFrom.size());
     if (Token->MacroCtx->Role != MR_Hidden) {
       // The current token in the reconstructed token stream must be the token
