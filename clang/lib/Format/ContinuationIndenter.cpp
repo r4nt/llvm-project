@@ -18,6 +18,7 @@
 #include "WhitespaceManager.h"
 #include "clang/Basic/OperatorPrecedence.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/TokenKinds.h"
 #include "clang/Format/Format.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Debug.h"
@@ -739,9 +740,15 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
   if (Previous.is(TT_TemplateString) && Previous.opensScope())
     CurrentState.NoLineBreak = true;
 
+  // Align following lines within parenthesis / brackets if configured.
+  // For a line of macro parents, the commas that follow the opening parenthesis
+  // in the line come after the opening parenthesis' children - we want to align
+  // the comma with the previous token's children instead of the opening
+  // parenthesis.
   if (Style.AlignAfterOpenBracket != FormatStyle::BAS_DontAlign &&
       !CurrentState.IsCSharpGenericTypeConstraint && Previous.opensScope() &&
       Previous.isNot(TT_ObjCMethodExpr) && Previous.isNot(TT_RequiresClause) &&
+      !(Current.MacroParent && Previous.MacroParent) &&
       (Current.isNot(TT_LineComment) || Previous.is(BK_BracedInit))) {
     CurrentState.Indent = State.Column + Spaces;
     CurrentState.IsAligned = true;

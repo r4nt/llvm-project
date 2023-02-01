@@ -149,7 +149,7 @@ private:
 ///
 /// After this point, the state of the spelled/expanded stream is "in sync"
 /// (both at the start of an UnwrappedLine, with no macros open), so the
-/// Unexpander can be thrown away and parsing can continue.
+/// Reconstructor can be thrown away and parsing can continue.
 ///
 /// Given a mapping from the macro name identifier token in the macro call
 /// to the tokens of the macro call, for example:
