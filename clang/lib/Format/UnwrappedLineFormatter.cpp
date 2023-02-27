@@ -998,8 +998,9 @@ protected:
     }
 
     if (NewLine || Previous.MacroParent) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Formatting children of " << Previous.TokenText << "\n");
       const ParenState &P = State.Stack.back();
-
       int AdditionalIndent =
           P.Indent - Previous.Children[0]->Level * Style.IndentWidth;
 
@@ -1018,6 +1019,8 @@ protected:
                                  /*FixBadIndentation=*/true);
       return true;
     }
+    LLVM_DEBUG(llvm::dbgs() << "Formatting children of " << Previous.TokenText
+                            << " in a single line.\n");
 
     if (Previous.Children[0]->First->MustBreakBefore)
       return false;
@@ -1252,17 +1255,47 @@ private:
   /// penalty of \p Penalty. Insert a line break if \p NewLine is \c true.
   void addNextStateToQueue(unsigned Penalty, StateNode *PreviousNode,
                            bool NewLine, unsigned *Count, QueueType *Queue) {
-    if (NewLine && !Indenter->canBreak(PreviousNode->State))
+                            bool wasAuto = 
+                            PreviousNode->State.NextToken->is(tok::kw_auto);
+                            bool wasLogs =
+                            PreviousNode->State.NextToken->is(tok::identifier)
+                            && PreviousNode->State.NextToken->TokenText == "logs";
+    if (NewLine && (!Indenter->canBreak(PreviousNode->State) || wasLogs)) {
+//        || PreviousNode->State.NextToken->is(tok::kw_auto))) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Not adding newline state because we cannot break before: "
+                 << PreviousNode->State.NextToken->TokenText << "\n");
       return;
-    if (!NewLine && Indenter->mustBreak(PreviousNode->State))
+    }
+    if (!NewLine && (Indenter->mustBreak(PreviousNode->State)
+    || wasAuto)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Not adding !newline state because we must break before: "
+                 << PreviousNode->State.NextToken->TokenText << "\n");
       return;
+    }
 
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
-    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty))
+    if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "Formatting children failed! NewLine: " << NewLine
+                 << ", canBreak: " << Indenter->canBreak(PreviousNode->State)
+                 << ", mustBreak: " << Indenter->mustBreak(PreviousNode->State)
+                 << ", Token: " << Node->State.NextToken->TokenText
+                 << ", Parent: " << Node->State.NextToken->Previous->TokenText
+                 << "\n");
       return;
+    }
 
+    int OldPenalty = Penalty;
     Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
+    if (wasAuto) {
+      LLVM_DEBUG(llvm::dbgs() << "Auto penalty: " << (Penalty - OldPenalty));
+    }
+    if (wasLogs) {
+      LLVM_DEBUG(llvm::dbgs() << "*** Logs penalty: " << (Penalty - OldPenalty));
+    }
 
     Queue->push(QueueItem(OrderedPenalty(Penalty, *Count), Node));
     ++(*Count);

@@ -130,6 +130,14 @@ static bool startsNextParameter(const FormatToken &Current,
   }
   if (Style.Language == FormatStyle::LK_Proto && Current.is(TT_SelectorName))
     return true;
+    llvm::dbgs() << "Previous: " << Previous.TokenText << 
+    ", " << Current.TokenText << ": " <<
+  ( Previous.is(tok::comma) && !Current.isTrailingComment() &&
+         ((Previous.isNot(TT_CtorInitializerComma) ||
+           Style.BreakConstructorInitializers !=
+               FormatStyle::BCIS_BeforeComma) &&
+          (Previous.isNot(TT_InheritanceComma) ||
+           Style.BreakInheritanceList != FormatStyle::BILS_BeforeComma))) << "\n";
   return Previous.is(tok::comma) && !Current.isTrailingComment() &&
          ((Previous.isNot(TT_CtorInitializerComma) ||
            Style.BreakConstructorInitializers !=
@@ -283,6 +291,11 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   const FormatToken &Previous = *Current.Previous;
   const auto &CurrentState = State.Stack.back();
   assert(&Previous == Current.Previous);
+  // We can always break before a macro argument to underline the structure
+  // of the expanded code.
+//  if (!Previous.Children.empty() && Previous.MacroParent)
+//   return true;
+
   if (!Current.CanBreakBefore && !(CurrentState.BreakBeforeClosingBrace &&
                                    Current.closesBlockOrBlockTypeList(Style))) {
     return false;
@@ -900,9 +913,14 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
   //   member(value),
   //   looooooooooooooooong_member(
   //       looooooooooong_call(param_1, param_2, param_3))
+  llvm::dbgs() << "Next: " << State.NextToken->TokenText << "\n";
+  llvm::dbgs() << "State.Column: " << State.Column << ", State.FirstIndent: "
+  << State.FirstIndent << "\n";
   if (State.Column > State.FirstIndent) {
+    llvm::dbgs() << "This doesn't work with macro expansion...\n";
     Penalty +=
         Style.PenaltyIndentedWhitespace * (State.Column - State.FirstIndent);
+    llvm::dbgs() << Style.PenaltyIndentedWhitespace * (State.Column - State.FirstIndent) << "\n";
   }
 
   // Indent nested blocks relative to this column, unless in a very specific
