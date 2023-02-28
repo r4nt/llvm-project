@@ -13,6 +13,7 @@
 
 #include "ContinuationIndenter.h"
 #include "BreakableToken.h"
+#include "FormatDebug.h"
 #include "FormatInternal.h"
 #include "FormatToken.h"
 #include "WhitespaceManager.h"
@@ -285,6 +286,8 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   assert(&Previous == Current.Previous);
   if (!Current.CanBreakBefore && !(CurrentState.BreakBeforeClosingBrace &&
                                    Current.closesBlockOrBlockTypeList(Style))) {
+    DEBUG_FORMAT_TRACE_STATE(
+        State, "!canBreak: CanBreakBefore set to false on state.\n");
     return false;
   }
   // The opening "{" of a braced list has to be on the same line as the first
@@ -293,6 +296,7 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       Previous.isNot(TT_DictLiteral) && Previous.is(BK_BracedInit) &&
       Previous.Previous &&
       Previous.Previous->isOneOf(tok::l_brace, tok::l_paren, tok::comma)) {
+    DEBUG_FORMAT_TRACE_STATE(State, "!canBreak: Braced list {} alignment.\n");
     return false;
   }
   // This prevents breaks like:
@@ -303,35 +307,48 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   if (Previous.opensScope() && Previous.isNot(tok::l_brace) &&
       State.LowestLevelOnLine < State.StartOfLineLevel &&
       State.LowestLevelOnLine < Current.NestingLevel) {
+    DEBUG_FORMAT_TRACE_STATE(State, "!canBreak: No trailing method calls.\n");
     return false;
   }
-  if (Current.isMemberAccess() && CurrentState.ContainsUnwrappedBuilder)
+  if (Current.isMemberAccess() && CurrentState.ContainsUnwrappedBuilder) {
+    DEBUG_FORMAT_TRACE_STATE(State,
+                             "!canBreak: Do not break unwrapped builder.\n");
     return false;
+  }
 
   // Don't create a 'hanging' indent if there are multiple blocks in a single
   // statement.
   if (Previous.is(tok::l_brace) && State.Stack.size() > 1 &&
       State.Stack[State.Stack.size() - 2].NestedBlockInlined &&
       State.Stack[State.Stack.size() - 2].HasMultipleNestedBlocks) {
+    DEBUG_FORMAT_TRACE_STATE(State, "!canBreak: No hanging indent.\n");
     return false;
   }
 
   // Don't break after very short return types (e.g. "void") as that is often
   // unexpected.
   if (Current.is(TT_FunctionDeclarationName) && State.Column < 6) {
-    if (Style.AlwaysBreakAfterReturnType == FormatStyle::RTBS_None)
+    if (Style.AlwaysBreakAfterReturnType == FormatStyle::RTBS_None) {
+      DEBUG_FORMAT_TRACE_STATE(
+          State, "!canBreak: Don't break after short return type.\n");
       return false;
+    }
   }
 
   // If binary operators are moved to the next line (including commas for some
   // styles of constructor initializers), that's always ok.
   if (!Current.isOneOf(TT_BinaryOperator, tok::comma) &&
       CurrentState.NoLineBreakInOperand) {
+    DEBUG_FORMAT_TRACE_STATE(State, "!canBreak: No line breaks in operaands "
+                                    "other than binary operators and comma.\n");
     return false;
   }
 
-  if (Previous.is(tok::l_square) && Previous.is(TT_ObjCMethodExpr))
+  if (Previous.is(tok::l_square) && Previous.is(TT_ObjCMethodExpr)) {
+    DEBUG_FORMAT_TRACE_STATE(State,
+                             "!canBreak: Don't break after ObjC-method [\n");
     return false;
+  }
 
   if (Current.is(TT_ConditionalExpr) && Previous.is(tok::r_paren) &&
       Previous.MatchingParen && Previous.MatchingParen->Previous &&
@@ -339,9 +356,15 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       Previous.MatchingParen->Previous->MatchingParen->is(TT_LambdaLBrace)) {
     // We have a lambda within a conditional expression, allow breaking here.
     assert(Previous.MatchingParen->Previous->is(tok::r_brace));
+    DEBUG_FORMAT_TRACE_STATE(State, "canBreak: Lambda within conditional.\n");
     return true;
   }
 
+  LLVM_DEBUG({
+    if (CurrentState.NoLineBreak) {
+      DEBUG_FORMAT_TRACE_STATE(State, "!canBreak: ParenState.NoLineBreak.\n");
+    }
+  });
   return !CurrentState.NoLineBreak;
 }
 
@@ -694,10 +717,14 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
   // declaration unless there is multiple inheritance.
   if (Style.BreakInheritanceList == FormatStyle::BILS_BeforeComma &&
       Current.is(TT_InheritanceColon)) {
+    DEBUG_FORMAT_TRACE_STATE(State, "NoLineBreak: breaking within inheritance "
+                                    "declaration turned off by mode.\n");
     CurrentState.NoLineBreak = true;
   }
   if (Style.BreakInheritanceList == FormatStyle::BILS_AfterColon &&
       Previous.is(TT_InheritanceColon)) {
+    DEBUG_FORMAT_TRACE_STATE(State, "NoLineBreak: breaking within inheritance "
+                                    "declaration turned off by mode.\n");
     CurrentState.NoLineBreak = true;
   }
 
@@ -735,10 +762,17 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
       //               caaaaaaaaaaaaaaaaaaaaaaall(aaaaaaaaaaaaaa, aaaaaaaaa))));
       Current.FakeLParens.size() > 0 &&
       Current.FakeLParens.back() > prec::Unknown) {
+    DEBUG_FORMAT_TRACE_STATE(State,
+                             "NoLineBreak: AlwaysBreak / Blockindent requires "
+                             "wrapping directly after parenthesis.\n");
     CurrentState.NoLineBreak = true;
   }
-  if (Previous.is(TT_TemplateString) && Previous.opensScope())
+  if (Previous.is(TT_TemplateString) && Previous.opensScope()) {
+    DEBUG_FORMAT_TRACE_STATE(
+        State,
+        "NoLineBreak: Don't break after template string opening a scope.\n");
     CurrentState.NoLineBreak = true;
+  }
 
   // Align following lines within parentheses / brackets if configured.
   // Note: This doesn't apply to macro expansion lines, which are MACRO( , , )
@@ -752,15 +786,19 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
     CurrentState.Indent = State.Column + Spaces;
     CurrentState.IsAligned = true;
   }
-  if (CurrentState.AvoidBinPacking && startsNextParameter(Current, Style))
+  if (CurrentState.AvoidBinPacking && startsNextParameter(Current, Style)) {
+    DEBUG_FORMAT_TRACE_STATE(State, "NoLineBreak: Avoid bin-packing.\n");
     CurrentState.NoLineBreak = true;
+  }
   if (startsSegmentOfBuilderTypeCall(Current) &&
       State.Column > getNewLineColumn(State)) {
     CurrentState.ContainsUnwrappedBuilder = true;
   }
 
-  if (Current.is(TT_LambdaArrow) && Style.Language == FormatStyle::LK_Java)
+  if (Current.is(TT_LambdaArrow) && Style.Language == FormatStyle::LK_Java) {
+    DEBUG_FORMAT_TRACE_STATE(State, "NoLineBreak: After lambda-arrow in Java.\n");
     CurrentState.NoLineBreak = true;
+  }
   if (Current.isMemberAccess() && Previous.is(tok::r_paren) &&
       (Previous.MatchingParen &&
        (Previous.TotalLength - Previous.MatchingParen->TotalLength > 10))) {
@@ -770,6 +808,8 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
     //       2);
     // We don't want to do this for short parameters as they can just be
     // indexes.
+    DEBUG_FORMAT_TRACE_STATE(
+        State, "NoLineBreak: After member call opening parenthesis.\n");
     CurrentState.NoLineBreak = true;
   }
 
@@ -778,6 +818,8 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
   // Exclude relational operators, as there, it is always more desirable to
   // have the LHS 'left' of the RHS.
   const FormatToken *P = Current.getPreviousNonComment();
+  DEBUG_FORMAT_TRACE_STATE(State,
+  "Checking Previous: " << (P ? P->TokenText : "") << "\n");
   if (!Current.is(tok::comment) && P &&
       (P->isOneOf(TT_BinaryOperator, tok::comma) ||
        (P->is(TT_ConditionalExpr) && P->is(tok::colon))) &&
@@ -799,6 +841,8 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
          !(HasTwoOperands &&
            Style.AlignOperands != FormatStyle::OAS_DontAlign)) ||
         (!CurrentState.LastOperatorWrapped && BreakBeforeOperator)) {
+      DEBUG_FORMAT_TRACE_STATE(
+          State, "NoLineBreakInOperand: Don't split RHS of an operator.\n");
       CurrentState.NoLineBreakInOperand = true;
     }
   }
@@ -1456,8 +1500,10 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
       !Previous->is(TT_DictLiteral) && State.Stack.size() > 1 &&
       !CurrentState.HasMultipleNestedBlocks) {
     if (State.Stack[State.Stack.size() - 2].NestedBlockInlined && Newline)
-      for (ParenState &PState : llvm::drop_end(State.Stack))
+      for (ParenState &PState : llvm::drop_end(State.Stack)) {
+        DEBUG_FORMAT_TRACE_STATE(State, "Special-case JS formatting.\n");
         PState.NoLineBreak = true;
+      }
     State.Stack[State.Stack.size() - 2].NestedBlockInlined = false;
   }
   if (Previous && (Previous->isOneOf(TT_BinaryOperator, TT_ConditionalExpr) ||
@@ -1535,6 +1581,11 @@ void ContinuationIndenter::moveStatePastFakeLParens(LineState &State,
     NewParenState.UnindentOperator = false;
     NewParenState.NoLineBreak =
         NewParenState.NoLineBreak || CurrentState.NoLineBreakInOperand;
+    LLVM_DEBUG({
+      if (NewParenState.NoLineBreak) {
+        DEBUG_FORMAT_TRACE_STATE(State, "NoLineBreak: NoLineBreakInOperand.\n");
+      }
+    });
 
     // Don't propagate AvoidBinPacking into subexpressions of arg/param lists.
     if (PrecedenceLevel > prec::Comma)
@@ -2608,6 +2659,10 @@ bool ContinuationIndenter::nextIsMultilineString(const LineState &State) {
     return true; // String will be split.
   }
   return false;
+}
+
+bool LineState::Trace() const {
+  return internal::DebugTraceToken().match(NextToken->TokenText);
 }
 
 } // namespace format

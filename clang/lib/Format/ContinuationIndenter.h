@@ -478,7 +478,18 @@ struct LineState {
       return false;
     return Stack < Other.Stack;
   }
+
+#ifndef NDEBUG
+  bool Trace() const;
+#endif
 };
+
+#ifndef NDEBUG
+#define DEBUG_FORMAT_TRACE_STATE(State, Debug)                                 \
+  LLVM_DEBUG(if (State.Trace()) llvm::dbgs()                                   \
+             << "* Tracing token " << State.NextToken->TokenText << ": "       \
+             << Debug)
+#endif
 
 } // end namespace format
 } // end namespace clang
