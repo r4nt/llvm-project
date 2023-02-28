@@ -2614,13 +2614,6 @@ public:
       // Consume operators with higher precedence.
       parse(Precedence + 1);
 
-      // Do not assign fake parenthesis to tokens that are part of an
-      // unexpanded macro call. The line within the macro call contains
-      // the parenthesis and commas, and we will not find operators within
-      // that structure.
-      if (Current && Current->MacroParent)
-        break;
-
       int CurrentPrecedence = getCurrentPrecedence();
 
       if (Precedence == CurrentPrecedence && Current &&
@@ -2753,6 +2746,12 @@ private:
 
   void addFakeParenthesis(FormatToken *Start, prec::Level Precedence,
                           FormatToken *End = nullptr) {
+    // Do not assign fake parenthesis to tokens that are part of an
+    // unexpanded macro call. The line within the macro call contains
+    // the parenthesis and commas, and we will not find operators within
+    // that structure.
+    if (Start->MacroParent) return;
+
     Start->FakeLParens.push_back(Precedence);
     if (Precedence > prec::Unknown)
       Start->StartsBinaryExpression = true;
@@ -3244,10 +3243,17 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) const {
 
     const auto &Children = Prev->Children;
     if (!Children.empty() && Children.back()->Last->is(TT_LineComment)) {
+      LLVM_DEBUG({
+        llvm::dbgs() << Current->TokenText << " - MustBreakBefore\n";
+      });
       Current->MustBreakBefore = true;
     } else {
       Current->MustBreakBefore =
           Current->MustBreakBefore || mustBreakBefore(Line, *Current);
+      LLVM_DEBUG({
+        llvm::dbgs() << Current->TokenText << " - MustBreakBefore " << 
+        Current->MustBreakBefore << "\n";
+      });
       if (!Current->MustBreakBefore && InFunctionDecl &&
           Current->is(TT_FunctionDeclarationName)) {
         Current->MustBreakBefore = mustBreakForReturnType(Line);

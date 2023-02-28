@@ -391,10 +391,15 @@ public:
   /// to another one please use overwriteFixedType, or even better remove the
   /// need to reassign the type.
   void setFinalizedType(TokenType T) {
+    if (MacroCtx && MacroCtx->Role == MR_UnexpandedArg)
+      return;
+
     Type = T;
     TypeIsFinalized = true;
   }
   void overwriteFixedType(TokenType T) {
+    if (MacroCtx && MacroCtx->Role == MR_UnexpandedArg)
+      return;
     TypeIsFinalized = false;
     setType(T);
   }
