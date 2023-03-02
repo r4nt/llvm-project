@@ -13,6 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "TokenAnnotator.h"
+#include "ContinuationIndenter.h"
+#include "FormatDebug.h"
 #include "FormatToken.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TokenKinds.h"
@@ -3336,6 +3338,7 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) const {
 
     const auto &Children = Prev->Children;
     if (!Children.empty() && Children.back()->Last->is(TT_LineComment)) {
+      DEBUG_FORMAT_TRACE_TOKEN(*Current, "MustBreakBefore");
       Current->MustBreakBefore = true;
     } else {
       Current->MustBreakBefore =
@@ -3344,6 +3347,8 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) const {
           Current->is(TT_FunctionDeclarationName)) {
         Current->MustBreakBefore = mustBreakForReturnType(Line);
       }
+      DEBUG_FORMAT_TRACE_TOKEN(*Current, (Current->MustBreakBefore ? "" : "!")
+                                             << "MustBreakBefore");
     }
 
     Current->CanBreakBefore =

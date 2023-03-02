@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "UnwrappedLineFormatter.h"
+#include "FormatDebug.h"
 #include "FormatToken.h"
 #include "NamespaceEndCommentsFixer.h"
 #include "WhitespaceManager.h"
@@ -1241,17 +1242,43 @@ private:
   /// penalty of \p Penalty. Insert a line break if \p NewLine is \c true.
   void addNextStateToQueue(unsigned Penalty, StateNode *PreviousNode,
                            bool NewLine, unsigned *Count, QueueType *Queue) {
-    if (NewLine && !Indenter->canBreak(PreviousNode->State))
+    bool MustBreak = false;
+    bool MustNotBreak = false;
+    LLVM_DEBUG({
+      if (internal::DebugForceMustBreak().match(
+              PreviousNode->State.NextToken->TokenText)) {
+        MustBreak = true;
+      }
+      if (internal::DebugForceMustNotBreak().match(
+              PreviousNode->State.NextToken->TokenText)) {
+        MustNotBreak = true;
+      }
+    });
+
+    if (NewLine && (!Indenter->canBreak(PreviousNode->State) || MustNotBreak) &&
+        !MustBreak) {
+      DEBUG_FORMAT_TRACE_TOKEN(*PreviousNode->State.NextToken,
+                               "Cannot break before");
       return;
-    if (!NewLine && Indenter->mustBreak(PreviousNode->State))
+    }
+    if (!NewLine && (Indenter->mustBreak(PreviousNode->State) || MustBreak) &&
+        !MustNotBreak) {
+      DEBUG_FORMAT_TRACE_TOKEN(*PreviousNode->State.NextToken,
+                               "Must break before");
       return;
+    }
 
     StateNode *Node = new (Allocator.Allocate())
         StateNode(PreviousNode->State, NewLine, PreviousNode);
     if (!formatChildren(Node->State, NewLine, /*DryRun=*/true, Penalty))
       return;
 
-    Penalty += Indenter->addTokenToState(Node->State, NewLine, true);
+    unsigned AddPenalty = Indenter->addTokenToState(Node->State, NewLine, true);
+    DEBUG_FORMAT_TRACE_TOKEN(*PreviousNode->State.NextToken,
+                             "Penalty for " << (!NewLine ? "not " : "")
+                                            << "breaking before token is "
+                                            << AddPenalty);
+    Penalty += AddPenalty;
 
     Queue->push(QueueItem(OrderedPenalty(Penalty, *Count), Node));
     ++(*Count);
