@@ -256,6 +256,45 @@ TEST_F(FormatTestMacroExpansion,
                          Style);
 }
 
+TEST_F(FormatTestMacroExpansion, CommaAsOperator) {
+  FormatStyle Style = getGoogleStyle();
+  Style.Macros.push_back("ASSIGN_OR_RETURN(a, b, c)=a=(b); if(x) c");
+  verifyFormat(R"(ASSIGN_OR_RETURN(auto reader,
+                 logs::proxy::Reader::NewReader(log_filename, access_options,
+                                                reader_options),
+                 _ << aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa << aaaaaa << aaaaaaaaa
+                   << aaaaaaaaaaaa << aaaaaaaaaaa << aaaaaaaaaaaa);
+)", Style);
+}
+
+TEST_F(FormatTestMacroExpansion, ForcedBreakDiffers) {
+  FormatStyle Style = getGoogleStyle();
+  Style.Macros.push_back("ASSIGN_OR_RETURN(a, b)=a=(b)");
+  EXPECT_EQ(R"(
+//
+ASSIGN_OR_RETURN(const lllllllllllllllllllllllllll xxxxxxxxxxxxxxx,
+                 aaaaaaaaaaaaaaaaaaaaaa(
+                     bbbbbbbbb, ccccccccccccccccccccccccccccc, dddddddddddd));
+)", format(R"(
+//
+ASSIGN_OR_RETURN(const lllllllllllllllllllllllllll xxxxxxxxxxxxxxx,
+                 aaaaaaaaaaaaaaaaaaaaaa(
+                     bbbbbbbbb, ccccccccccccccccccccccccccccc, dddddddddddd));
+)", Style));
+}
+
+TEST_F(FormatTestMacroExpansion, TOOD) {
+  FormatStyle Style = getGoogleStyle();
+  Style.Macros.push_back("MOCK_METHOD(r, n, a, s)=r n a s");
+  EXPECT_EQ(R"()", format(
+                       R"(
+MOCK_METHOD(
+    absl::StatusOr<hce_routing::GetAggregatorResponse>, GetAggregatorResponse,
+    (const QueueId&, const GetAggregatorKeyRequest&), (const, override));
+)",
+                       Style));
+}
+
 } // namespace
 } // namespace test
 } // namespace format
