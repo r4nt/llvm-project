@@ -6,6 +6,7 @@ add_clang_library(clangFormat
   ContinuationIndenter.cpp
   DefinitionBlockSeparator.cpp
   Format.cpp
+  FormatDebug.cpp
   FormatToken.cpp
   FormatTokenLexer.cpp
   IntegerLiteralSeparatorFixer.cpp

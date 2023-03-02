@@ -13,6 +13,7 @@
 
 #include "ContinuationIndenter.h"
 #include "BreakableToken.h"
+#include "FormatDebug.h"
 #include "FormatInternal.h"
 #include "FormatToken.h"
 #include "WhitespaceManager.h"
@@ -294,6 +295,7 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   assert(&Previous == Current.Previous);
   if (!Current.CanBreakBefore && !(CurrentState.BreakBeforeClosingBrace &&
                                    Current.closesBlockOrBlockTypeList(Style))) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
     return false;
   }
   // The opening "{" of a braced list has to be on the same line as the first
@@ -302,6 +304,7 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       Previous.isNot(TT_DictLiteral) && Previous.is(BK_BracedInit) &&
       Previous.Previous &&
       Previous.Previous->isOneOf(tok::l_brace, tok::l_paren, tok::comma)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
     return false;
   }
   // This prevents breaks like:
@@ -312,10 +315,13 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   if (Previous.opensScope() && Previous.isNot(tok::l_brace) &&
       State.LowestLevelOnLine < State.StartOfLineLevel &&
       State.LowestLevelOnLine < Current.NestingLevel) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
     return false;
   }
-  if (Current.isMemberAccess() && CurrentState.ContainsUnwrappedBuilder)
+  if (Current.isMemberAccess() && CurrentState.ContainsUnwrappedBuilder) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
     return false;
+  }
 
   // Don't create a 'hanging' indent if there are multiple blocks in a single
   // statement and we are aligning lambda blocks to their signatures.
@@ -323,14 +329,17 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       State.Stack[State.Stack.size() - 2].NestedBlockInlined &&
       State.Stack[State.Stack.size() - 2].HasMultipleNestedBlocks &&
       Style.LambdaBodyIndentation == FormatStyle::LBI_Signature) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
     return false;
   }
 
   // Don't break after very short return types (e.g. "void") as that is often
   // unexpected.
   if (Current.is(TT_FunctionDeclarationName) && State.Column < 6) {
-    if (Style.AlwaysBreakAfterReturnType == FormatStyle::RTBS_None)
+    if (Style.AlwaysBreakAfterReturnType == FormatStyle::RTBS_None) {
+      DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
       return false;
+    }
   }
 
   // If binary operators are moved to the next line (including commas for some
@@ -342,11 +351,14 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       (!Style.BraceWrapping.BeforeLambdaBody ||
        Current.isNot(TT_LambdaLBrace)) &&
       CurrentState.NoLineBreakInOperand) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
     return false;
   }
 
-  if (Previous.is(tok::l_square) && Previous.is(TT_ObjCMethodExpr))
+  if (Previous.is(tok::l_square) && Previous.is(TT_ObjCMethodExpr)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!canBreak");
     return false;
+  }
 
   if (Current.is(TT_ConditionalExpr) && Previous.is(tok::r_paren) &&
       Previous.MatchingParen && Previous.MatchingParen->Previous &&
@@ -354,10 +366,14 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
       Previous.MatchingParen->Previous->MatchingParen->is(TT_LambdaLBrace)) {
     // We have a lambda within a conditional expression, allow breaking here.
     assert(Previous.MatchingParen->Previous->is(tok::r_brace));
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "canBreak");
     return true;
   }
 
-  return !State.NoLineBreak && !CurrentState.NoLineBreak;
+  bool CanBreak = !State.NoLineBreak && !CurrentState.NoLineBreak;
+  DEBUG_FORMAT_TRACE_TOKEN(Current, (!CanBreak ? "!" : "")
+                                        << "canBreak");
+  return CanBreak;
 }
 
 bool ContinuationIndenter::mustBreak(const LineState &State) {
@@ -367,6 +383,9 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   if (Style.BraceWrapping.BeforeLambdaBody && Current.CanBreakBefore &&
       Current.is(TT_LambdaLBrace) && Previous.isNot(TT_LineComment)) {
     auto LambdaBodyLength = getLengthToMatchingParen(Current, State.Stack);
+    DEBUG_FORMAT_TRACE_TOKEN(
+        Current, (LambdaBodyLength <= getColumnLimit(State) ? "!" : "")
+                     << "mustBreak");
     return LambdaBodyLength > getColumnLimit(State);
   }
   if (Current.MustBreakBefore ||
@@ -374,26 +393,32 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
        (Style.BreakBeforeInlineASMColon == FormatStyle::BBIAS_Always ||
         (Style.BreakBeforeInlineASMColon == FormatStyle::BBIAS_OnlyMultiline &&
          Style.ColumnLimit > 0)))) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
   if (CurrentState.BreakBeforeClosingBrace &&
       (Current.closesBlockOrBlockTypeList(Style) ||
        (Current.is(tok::r_brace) &&
         Current.isBlockIndentedInitRBrace(Style)))) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
-  if (CurrentState.BreakBeforeClosingParen && Current.is(tok::r_paren))
+  if (CurrentState.BreakBeforeClosingParen && Current.is(tok::r_paren)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
+  }
   if (Style.Language == FormatStyle::LK_ObjC &&
       Style.ObjCBreakBeforeNestedBlockParam &&
       Current.ObjCSelectorNameParts > 1 &&
       Current.startsSequence(TT_SelectorName, tok::colon, tok::caret)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
   // Avoid producing inconsistent states by requiring breaks where they are not
   // permitted for C# generic type constraints.
   if (CurrentState.IsCSharpGenericTypeConstraint &&
       Previous.isNot(TT_CSharpGenericTypeConstraintComma)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return false;
   }
   if ((startsNextParameter(Current, Style) || Previous.is(tok::semi) ||
@@ -410,6 +435,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
         Previous.is(TT_ConditionalExpr))) &&
       CurrentState.BreakBeforeParameter && !Current.isTrailingComment() &&
       !Current.isOneOf(tok::r_paren, tok::r_brace)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
   if (CurrentState.IsChainedConditional &&
@@ -417,6 +443,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
         Current.is(tok::colon)) ||
        (!Style.BreakBeforeTernaryOperators && Previous.is(TT_ConditionalExpr) &&
         Previous.is(tok::colon)))) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
   if (((Previous.is(TT_DictLiteral) && Previous.is(tok::l_brace)) ||
@@ -426,6 +453,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
       Style.ColumnLimit > 0 &&
       getLengthToMatchingParen(Previous, State.Stack) + State.Column - 1 >
           getColumnLimit(State)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -441,17 +469,20 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
       (Style.AllowShortFunctionsOnASingleLine != FormatStyle::SFS_All ||
        Style.BreakConstructorInitializers != FormatStyle::BCIS_BeforeColon ||
        Style.ColumnLimit != 0)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
   if (Current.is(TT_ObjCMethodExpr) && Previous.isNot(TT_SelectorName) &&
       State.Line->startsWith(TT_ObjCMethodSpecifier)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
   if (Current.is(TT_SelectorName) && Previous.isNot(tok::at) &&
       CurrentState.ObjCSelectorNameFound && CurrentState.BreakBeforeParameter &&
       (Style.ObjCBreakBeforeNestedBlockParam ||
        !Current.startsSequence(TT_SelectorName, tok::colon, tok::caret))) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -460,6 +491,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
       State.Column + getLengthToNextOperator(Current) > Style.ColumnLimit &&
       (State.Column > NewLineColumn ||
        Current.NestingLevel < State.StartOfLineLevel)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -473,6 +505,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
       // FIXME: We should find a more generic solution to this problem.
       !(State.Column <= NewLineColumn && Style.isJavaScript()) &&
       !(Previous.closesScopeAfterBlock() && State.Column <= NewLineColumn)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -480,11 +513,14 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   // function/class declaration.
   if (Previous.ClosesTemplateDeclaration && CurrentState.BreakBeforeParameter &&
       Current.CanBreakBefore) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
-  if (State.Line->First->isNot(tok::kw_enum) && State.Column <= NewLineColumn)
+  if (State.Line->First->isNot(tok::kw_enum) && State.Column <= NewLineColumn) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "!mustBreak");
     return false;
+  }
 
   if (Style.AlwaysBreakBeforeMultilineStrings &&
       (NewLineColumn == State.FirstIndent + Style.ContinuationIndentWidth ||
@@ -493,6 +529,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
                         Keywords.kw_dollar) &&
       !Previous.isOneOf(TT_InlineASMColon, TT_ConditionalExpr) &&
       nextIsMultilineString(State)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -505,8 +542,10 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
         CurrentState.BreakBeforeParameter && !Current.isTrailingComment()) {
       const bool LHSIsBinaryExpr =
           Previous.Previous && Previous.Previous->EndsBinaryExpression;
-      if (LHSIsBinaryExpr)
+      if (LHSIsBinaryExpr) {
+        DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
         return true;
+      }
       // If we need to break somewhere inside the LHS of a binary expression, we
       // should also break after the operator. Otherwise, the formatting would
       // hide the operator precedence, e.g. in:
@@ -522,17 +561,21 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
            PreviousPrecedence == prec::Spaceship) &&
           Previous.Previous &&
           Previous.Previous->isNot(TT_BinaryOperator); // For >>.
-      if (!IsComparison)
+      if (!IsComparison) {
+        DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
         return true;
+      }
     }
   } else if (Current.is(TT_BinaryOperator) && Current.CanBreakBefore &&
              CurrentState.BreakBeforeParameter) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
   // Same as above, but for the first "<<" operator.
   if (Current.is(tok::lessless) && Current.isNot(TT_OverloadedOperator) &&
       CurrentState.BreakBeforeParameter && CurrentState.FirstLessLess == 0) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -547,8 +590,10 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
         case FormatStyle::BBCDS_Allowed:
           break;
         case FormatStyle::BBCDS_Always:
+          DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
           return true;
         case FormatStyle::BBCDS_Never:
+          DEBUG_FORMAT_TRACE_TOKEN(Current, "!mustBreak");
           return false;
         }
       }
@@ -556,8 +601,10 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
         switch (Style.RequiresClausePosition) {
         case FormatStyle::RCPS_SingleLine:
         case FormatStyle::RCPS_WithPreceding:
+          DEBUG_FORMAT_TRACE_TOKEN(Current, "!mustBreak");
           return false;
         default:
+          DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
           return true;
         }
       }
@@ -565,10 +612,12 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
     }
     if (Previous.is(TT_FunctionAnnotationRParen) &&
         State.Line->Type != LT_PreprocessorDirective) {
+      DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
       return true;
     }
     if (Previous.is(TT_LeadingJavaAnnotation) && Current.isNot(tok::l_paren) &&
         Current.isNot(TT_LeadingJavaAnnotation)) {
+      DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
       return true;
     }
   }
@@ -579,8 +628,10 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
     // functions, getters and setters.
     static const llvm::StringSet<> BreakBeforeDecoratedTokens = {"get", "set",
                                                                  "function"};
-    if (BreakBeforeDecoratedTokens.contains(Current.TokenText))
+    if (BreakBeforeDecoratedTokens.contains(Current.TokenText)) {
+      DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
       return true;
+    }
   }
 
   // If the return type spans multiple lines, wrap before the function name.
@@ -594,6 +645,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
         !Style.isJavaScript()) ||
        (Current.is(tok::kw_operator) && Previous.isNot(tok::coloncolon))) &&
       Previous.isNot(tok::kw_template) && CurrentState.BreakBeforeParameter) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -603,6 +655,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   if (Style.ColumnLimit != 0 && Previous.is(BK_Block) &&
       Previous.is(tok::l_brace) &&
       !Current.isOneOf(tok::r_brace, tok::comment)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
@@ -610,15 +663,21 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
       ((Previous.is(tok::identifier) && Previous.TokenText == "endl") ||
        (Previous.Tok.isLiteral() && (Previous.TokenText.ends_with("\\n\"") ||
                                      Previous.TokenText == "\'\\n\'")))) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
   }
 
-  if (Previous.is(TT_BlockComment) && Previous.IsMultiline)
+  if (Previous.is(TT_BlockComment) && Previous.IsMultiline) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
+  }
 
-  if (State.NoContinuation)
+  if (State.NoContinuation) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "mustBreak");
     return true;
+  }
 
+  DEBUG_FORMAT_TRACE_TOKEN(Current, "!mustBreak");
   return false;
 }
 
@@ -747,10 +806,12 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
   // declaration unless there is multiple inheritance.
   if (Style.BreakInheritanceList == FormatStyle::BILS_BeforeComma &&
       Current.is(TT_InheritanceColon)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreak");
     CurrentState.NoLineBreak = true;
   }
   if (Style.BreakInheritanceList == FormatStyle::BILS_AfterColon &&
       Previous.is(TT_InheritanceColon)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreak");
     CurrentState.NoLineBreak = true;
   }
 
@@ -788,10 +849,13 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
       //               caaaaaaaaaaaaaaaaaaaaaaall(aaaaaaaaaaaaaa, aaaaaaaaa))));
       Current.FakeLParens.size() > 0 &&
       Current.FakeLParens.back() > prec::Unknown) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreak");
     CurrentState.NoLineBreak = true;
   }
-  if (Previous.is(TT_TemplateString) && Previous.opensScope())
+  if (Previous.is(TT_TemplateString) && Previous.opensScope()) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreak");
     CurrentState.NoLineBreak = true;
+  }
 
   // Align following lines within parentheses / brackets if configured.
   // Note: This doesn't apply to macro expansion lines, which are MACRO( , , )
@@ -806,8 +870,10 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
     CurrentState.Indent = State.Column + Spaces;
     CurrentState.IsAligned = true;
   }
-  if (CurrentState.AvoidBinPacking && startsNextParameter(Current, Style))
+  if (CurrentState.AvoidBinPacking && startsNextParameter(Current, Style)) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreak");
     CurrentState.NoLineBreak = true;
+  }
   if (startsSegmentOfBuilderTypeCall(Current) &&
       State.Column > getNewLineColumn(State)) {
     CurrentState.ContainsUnwrappedBuilder = true;
@@ -815,6 +881,7 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
 
   if (Current.is(TT_TrailingReturnArrow) &&
       Style.Language == FormatStyle::LK_Java) {
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreak");
     CurrentState.NoLineBreak = true;
   }
   if (Current.isMemberAccess() && Previous.is(tok::r_paren) &&
@@ -826,6 +893,7 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
     //       2);
     // We don't want to do this for short parameters as they can just be
     // indexes.
+    DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreak");
     CurrentState.NoLineBreak = true;
   }
 
@@ -855,6 +923,7 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
          !(HasTwoOperands &&
            Style.AlignOperands != FormatStyle::OAS_DontAlign)) ||
         (!CurrentState.LastOperatorWrapped && BreakBeforeOperator)) {
+      DEBUG_FORMAT_TRACE_TOKEN(Current, "NoLineBreakInOperand");
       CurrentState.NoLineBreakInOperand = true;
     }
   }
@@ -1658,6 +1727,8 @@ void ContinuationIndenter::moveStatePastFakeLParens(LineState &State,
     NewParenState.UnindentOperator = false;
     NewParenState.NoLineBreak =
         NewParenState.NoLineBreak || CurrentState.NoLineBreakInOperand;
+    DEBUG_FORMAT_TRACE_TOKEN(Current, (NewParenState.NoLineBreak ? "" : "!")
+                                          << "NoLineBreak");
 
     // Don't propagate AvoidBinPacking into subexpressions of arg/param lists.
     if (PrecedenceLevel > prec::Comma)
