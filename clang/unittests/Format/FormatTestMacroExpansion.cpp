@@ -287,6 +287,20 @@ TEST_F(FormatTestMacroExpansion,
                Style);
 }
 
+TEST_F(FormatTestMacroExpansion,
+       TODO) {
+  FormatStyle Style = getGoogleStyleWithColumns(80);
+  //Style.Macros.push_back("MOCK_METHOD(r, n, a)=r n a");
+  // In the expanded code, we parse a full function signature, and afterwards
+  // know that we prefer not to break before the function name.
+verifyFormat("void f() {\n"
+"  MOCK_METHOD(\n"
+"      abcd, ddddddd,\n"
+"      (llllllllll name, lllllllllllllllllllllllllllllllllllllllllllll handle));\n"
+"}",
+               Style);
+}
+
 } // namespace
 } // namespace test
 } // namespace format

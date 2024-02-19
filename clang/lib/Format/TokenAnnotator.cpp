@@ -4030,7 +4030,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
                                       bool InFunctionDecl) const {
   const FormatToken &Left = *Tok.Previous;
   const FormatToken &Right = Tok;
-
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty");
   if (Left.is(tok::semi))
     return 0;
 
@@ -4145,6 +4145,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     bool is_short_annotation = Right.TokenText.size() < 10;
     return (Left.is(tok::r_paren) ? 100 : 120) + (is_short_annotation ? 50 : 0);
   }
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty2");
 
   // In for-loops, prefer breaking at ',' and ';'.
   if (Line.startsWith(tok::kw_for) && Left.is(tok::equal))
@@ -4165,19 +4166,24 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
     return 500;
   }
 
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty2.1");
   if (Left.is(tok::l_paren) && Style.PenaltyBreakOpenParenthesis != 0)
     return Style.PenaltyBreakOpenParenthesis;
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty2.1.1");
   if (Left.is(tok::l_paren) && InFunctionDecl &&
       Style.AlignAfterOpenBracket != FormatStyle::BAS_DontAlign) {
     return 100;
   }
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty2.1.2");
   if (Left.is(tok::l_paren) && Left.Previous &&
       (Left.Previous->isOneOf(tok::kw_for, tok::kw__Generic) ||
        Left.Previous->isIf())) {
     return 1000;
   }
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty2.1.3");
   if (Left.is(tok::equal) && InFunctionDecl)
     return 110;
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty2.2");
   if (Right.is(tok::r_brace))
     return 1;
   if (Left.is(TT_TemplateOpener))
@@ -4197,6 +4203,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
   }
   if (Left.is(TT_JavaAnnotation))
     return 50;
+  DEBUG_FORMAT_TRACE_TOKEN(Right, "splitPenalty3");
 
   if (Left.is(TT_UnaryOperator))
     return 60;
