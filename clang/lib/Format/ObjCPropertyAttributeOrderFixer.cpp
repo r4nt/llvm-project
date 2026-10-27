@@ -173,7 +173,7 @@ void ObjCPropertyAttributeOrderFixer::analyzeObjCPropertyDecl(
   sortPropertyAttributes(SourceMgr, Fixes, LParenTok->Next, RParenTok);
 }
 
-std::pair<tooling::Replacements, unsigned>
+std::pair<tooling::Replacements, uint64_t>
 ObjCPropertyAttributeOrderFixer::analyze(
     TokenAnnotator & /*Annotator*/,
     SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,

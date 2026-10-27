@@ -26997,6 +26997,73 @@ TEST_F(FormatTest, LambdaArrowAsTrailingReturnArrow) {
   verifyNoCrash("void foo()([] consteval -> int {}())");
 }
 
+TEST_F(FormatTest, SaturatingPenaltyOverflowInLambda) {
+  FormatStyle Style = getGoogleStyle();
+  verifyFormat(
+      "ASSERT_OK_AND_ASSIGN(\n"
+      "    PricingCreationDetails details,\n"
+      "    ([this, &creation_params, &sku_key, &product_title,\n"
+      "      &offer_end_timestamp]() -> absl::StatusOr<PricingCreationDetails> {\n"
+      "      return PricingCreateTransactionRunner(\n"
+      "                 *database_, *clock_, creation_params.is_dry_run,\n"
+      "                 creation_params.creator_ldap, product_title,\n"
+      "                 creation_params.offer_id, sku_key,\n"
+      "                 creation_params.sales_channel,\n"
+      "                 creation_params.target_region_codes,\n"
+      "                 creation_params.pricing_phase_inputs,\n"
+      "                 creation_params.auto_renewing_plan_index,\n"
+      "                 creation_params.one_time_purchase_offer_details_inputs,\n"
+      "                 creation_params.one_time_purchase_offer_tax_and_compliance,\n"
+      "                 creation_params.product_tax_and_compliance_settings,\n"
+      "                 creation_params.regional_Configs,\n"
+      "                 creation_params.parent_offer_id,\n"
+      "                 creation_params.parent_purchase_option_id,\n"
+      "                 creation_params.purchase_option_id,\n"
+      "                 creation_params.legacy_recurring_price,\n"
+      "                 creation_params.subscription_tax_and_compliance,\n"
+      "                 creation_params.offer_tags,\n"
+      "                 creation_params.preorder_plan_input,\n"
+      "                 creation_params.rent_plan_input,\n"
+      "                 creation_params.proration_mode,\n"
+      "                 creation_params.installment_plan,\n"
+      "                 creation_params.enable_stp_validation,\n"
+      "                 creation_params.allow_out_of_range_prices,\n"
+      "                 creation_params.allow_empty_region_config,\n"
+      "                 creation_params.is_programmatic_access,\n"
+      "                 creation_params.skip_validation_for_migration,\n"
+      "                 creation_params.enable_Purchase_option_migration,\n"
+      "                 creation_params.is_in_app_product,\n"
+      "                 creation_params.skip_base_plan_proration_validation,\n"
+      "                 creation_params.skip_offer_phase_price_validation,\n"
+      "                 creation_params.max_allowed_regions,\n"
+      "                 creation_params.max_offers_per_product,\n"
+      "                 creation_params.max_offers_per_base_plan,\n"
+      "                 creation_params.max_purchase_options_per_product,\n"
+      "                 creation_params.max_preorders_per_product,\n"
+      "                 creation_params.enable_multi_quantity,\n"
+      "                 creation_params.allow_zero_price_for_paid_sku,\n"
+      "                 creation_params.validate_region_availability,\n"
+      "                 creation_params.enable_Auto_convertible_preorders,\n"
+      "                 offer_end_timestamp,\n"
+      "                 creation_params.enable_region_specific_pricing_constraints,\n"
+      "                 creation_params.is_enterprise_app,\n"
+      "                 creation_params.enable_instant_purchase_option_activation,\n"
+      "                 creation_params.enable_historical_pricing_check,\n"
+      "                 creation_params.allow_overlapping_offers,\n"
+      "                 creation_params.enable_prorated_phase_validation,\n"
+      "                 creation_params.enable_starter_plan_validation,\n"
+      "                 creation_params.enable_carrier_billing_validation,\n"
+      "                 creation_params.enable_region_pricing_consistency_check,\n"
+      "                 creation_params.enable_archived_base_plan_reactivation,\n"
+      "                 creation_params.enable_offer_duration_validation,\n"
+      "                 creation_params.enable_tax_category_validation,\n"
+      "                 creation_params.enable_compliance_Attributes_validation,\n"
+      "                 EXP_FLAG_CatalogShared__enable_pricing_redundancy_prevention)  // NOLINT\n"
+      "          .Run();\n"
+      "    }()));",
+      Style);
+}
+
 } // namespace
 } // namespace test
 } // namespace format

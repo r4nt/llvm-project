@@ -2688,7 +2688,7 @@ public:
   ParensRemover(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -2721,7 +2721,7 @@ public:
   BracesInserter(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -2775,7 +2775,7 @@ public:
   BracesRemover(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -2816,7 +2816,7 @@ public:
   SemiRemover(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -2868,7 +2868,7 @@ public:
   EnumTrailingCommaEditor(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -2920,7 +2920,7 @@ public:
   JavaScriptRequoter(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -3009,7 +3009,7 @@ public:
             FormattingAttemptStatus *Status)
       : TokenAnalyzer(Env, Style), Status(Status) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -3030,7 +3030,7 @@ public:
     ContinuationIndenter Indenter(Style, Tokens.getKeywords(),
                                   Env.getSourceManager(), Whitespaces, Encoding,
                                   BinPackInconclusiveFunctions);
-    unsigned Penalty =
+    uint64_t Penalty =
         UnwrappedLineFormatter(&Indenter, &Whitespaces, Style,
                                Tokens.getKeywords(), Env.getSourceManager(),
                                Status)
@@ -3163,7 +3163,7 @@ public:
   TrailingCommaInserter(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -3226,7 +3226,7 @@ public:
         DeletedTokens(FormatTokenLess(Env.getSourceManager())) {}
 
   // FIXME: eliminate unused parameters.
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -3447,7 +3447,7 @@ public:
   ObjCHeaderStyleGuesser(const Environment &Env, const FormatStyle &Style)
       : TokenAnalyzer(Env, Style), IsObjC(false) {}
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
@@ -4314,7 +4314,7 @@ cleanupAroundReplacements(StringRef Code, const tooling::Replacements &Replaces,
 }
 
 namespace internal {
-std::pair<tooling::Replacements, unsigned>
+std::pair<tooling::Replacements, uint64_t>
 reformat(const FormatStyle &Style, StringRef Code,
          ArrayRef<tooling::Range> Ranges, unsigned FirstStartColumn,
          unsigned NextStartColumn, unsigned LastStartColumn, StringRef FileName,
@@ -4375,7 +4375,7 @@ reformat(const FormatStyle &Style, StringRef Code,
   if (!Env)
     return {};
 
-  typedef std::function<std::pair<tooling::Replacements, unsigned>(
+  typedef std::function<std::pair<tooling::Replacements, uint64_t>(
       const Environment &)>
       AnalyzerPass;
 
@@ -4478,14 +4478,14 @@ reformat(const FormatStyle &Style, StringRef Code,
 
   std::optional<std::string> CurrentCode;
   tooling::Replacements Fixes;
-  unsigned Penalty = 0;
+  uint64_t Penalty = 0;
   for (size_t I = 0, E = Passes.size(); I < E; ++I) {
-    std::pair<tooling::Replacements, unsigned> PassFixes = Passes[I](*Env);
+    std::pair<tooling::Replacements, uint64_t> PassFixes = Passes[I](*Env);
     auto NewCode = applyAllReplacements(
         CurrentCode ? StringRef(*CurrentCode) : Code, PassFixes.first);
     if (NewCode) {
       Fixes = Fixes.merge(PassFixes.first);
-      Penalty += PassFixes.second;
+      Penalty = llvm::SaturatingAdd(Penalty, PassFixes.second);
       if (I + 1 < E) {
         CurrentCode = std::move(*NewCode);
         Env = Environment::make(

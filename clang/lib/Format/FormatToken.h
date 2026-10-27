@@ -1033,7 +1033,7 @@ public:
 
   /// Same as \c formatFromToken, but assumes that the first token has
   /// already been set thereby deciding on the first line break.
-  virtual unsigned formatAfterToken(LineState &State,
+  virtual uint64_t formatAfterToken(LineState &State,
                                     ContinuationIndenter *Indenter,
                                     bool DryRun) {
     return 0;
@@ -1055,7 +1055,7 @@ public:
 
   void precomputeFormattingInfos(const FormatToken *Token) override;
 
-  unsigned formatAfterToken(LineState &State, ContinuationIndenter *Indenter,
+  uint64_t formatAfterToken(LineState &State, ContinuationIndenter *Indenter,
                             bool DryRun) override;
 
   unsigned formatFromToken(LineState &State, ContinuationIndenter *Indenter,

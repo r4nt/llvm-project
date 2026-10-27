@@ -112,7 +112,7 @@ public:
   ///
   /// If \p DryRun is \c false, also creates and stores the required
   /// \c Replacement.
-  unsigned addTokenToState(LineState &State, bool Newline, bool DryRun,
+  uint64_t addTokenToState(LineState &State, bool Newline, bool DryRun,
                            unsigned ExtraSpaces = 0);
 
   /// Get the column limit for this line. This is the style's column
@@ -122,7 +122,7 @@ public:
 private:
   /// Mark the next token as consumed in \p State and modify its stacks
   /// accordingly.
-  unsigned moveStateToNextToken(LineState &State, bool DryRun, bool Newline);
+  uint64_t moveStateToNextToken(LineState &State, bool DryRun, bool Newline);
 
   /// Update 'State' according to the next token's fake left parentheses.
   void moveStatePastFakeLParens(LineState &State, bool Newline);
@@ -139,14 +139,14 @@ private:
   /// Reformats a raw string literal.
   ///
   /// \returns An extra penalty induced by reformatting the token.
-  unsigned reformatRawStringLiteral(const FormatToken &Current,
+  uint64_t reformatRawStringLiteral(const FormatToken &Current,
                                     LineState &State,
                                     const FormatStyle &RawStringStyle,
                                     bool DryRun, bool Newline);
 
   /// If the current token is at the end of the current line, handle
   /// the transition to the next line.
-  unsigned handleEndOfLine(const FormatToken &Current, LineState &State,
+  uint64_t handleEndOfLine(const FormatToken &Current, LineState &State,
                            bool DryRun, bool AllowBreak, bool Newline);
 
   /// If \p Current is a raw string that is configured to be reformatted,
@@ -172,7 +172,7 @@ private:
   /// the column limit where possible; if false, words are allowed to protrude
   /// over the column limit as long as the penalty is less than the penalty
   /// of a break.
-  std::pair<unsigned, bool> breakProtrudingToken(const FormatToken &Current,
+  std::pair<uint64_t, bool> breakProtrudingToken(const FormatToken &Current,
                                                  LineState &State,
                                                  bool AllowBreak, bool DryRun,
                                                  bool Strict);
@@ -200,7 +200,7 @@ private:
   ///
   /// If \p DryRun is \c false, also creates and stores the required
   /// \c Replacement.
-  unsigned addTokenOnNewLine(LineState &State, bool DryRun);
+  uint64_t addTokenOnNewLine(LineState &State, bool DryRun);
 
   /// Calculate the new column for a line wrap before the next token.
   IndentationAndAlignment getNewLineColumn(const LineState &State);
@@ -210,7 +210,7 @@ private:
   /// \returns Extra penalty for the first line of the literal: last line is
   /// handled in \c addNextStateToQueue, and the penalty for other lines doesn't
   /// matter, as we don't change them.
-  unsigned addMultilineToken(const FormatToken &Current, LineState &State);
+  uint64_t addMultilineToken(const FormatToken &Current, LineState &State);
 
   /// Returns \c true if the next token starts a multiline string
   /// literal.

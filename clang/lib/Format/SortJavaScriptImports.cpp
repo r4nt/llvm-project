@@ -136,7 +136,7 @@ public:
     invalidToken.Tok.startToken();
   }
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {

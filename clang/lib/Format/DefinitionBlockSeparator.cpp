@@ -18,7 +18,7 @@
 
 namespace clang {
 namespace format {
-std::pair<tooling::Replacements, unsigned> DefinitionBlockSeparator::analyze(
+std::pair<tooling::Replacements, uint64_t> DefinitionBlockSeparator::analyze(
     TokenAnnotator &Annotator, SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
     FormatTokenLexer &Tokens) {
   assert(Style.SeparateDefinitionBlocks != FormatStyle::SDS_Leave);

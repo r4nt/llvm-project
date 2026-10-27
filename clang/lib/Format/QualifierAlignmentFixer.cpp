@@ -576,7 +576,7 @@ LeftRightQualifierAlignmentFixer::LeftRightQualifierAlignmentFixer(
     : TokenAnalyzer(Env, Style), Qualifier(Qualifier), RightAlign(RightAlign),
       ConfiguredQualifierTokens(QualifierTokens) {}
 
-std::pair<tooling::Replacements, unsigned>
+std::pair<tooling::Replacements, uint64_t>
 LeftRightQualifierAlignmentFixer::analyze(
     TokenAnnotator & /*Annotator*/,
     SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,

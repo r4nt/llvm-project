@@ -78,11 +78,11 @@ class TokenAnalyzer : public UnwrappedLineConsumer {
 public:
   TokenAnalyzer(const Environment &Env, const FormatStyle &Style);
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   process(bool SkipAnnotation = false);
 
 protected:
-  virtual std::pair<tooling::Replacements, unsigned>
+  virtual std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) = 0;

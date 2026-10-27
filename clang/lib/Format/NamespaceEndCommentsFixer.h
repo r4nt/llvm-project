@@ -34,7 +34,7 @@ class NamespaceEndCommentsFixer : public TokenAnalyzer {
 public:
   NamespaceEndCommentsFixer(const Environment &Env, const FormatStyle &Style);
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override;

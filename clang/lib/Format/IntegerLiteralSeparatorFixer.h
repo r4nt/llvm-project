@@ -22,7 +22,7 @@ namespace format {
 
 class IntegerLiteralSeparatorFixer {
 public:
-  std::pair<tooling::Replacements, unsigned> process(const Environment &Env,
+  std::pair<tooling::Replacements, uint64_t> process(const Environment &Env,
                                                      const FormatStyle &Style);
 
 private:

@@ -35,7 +35,7 @@ class ObjCPropertyAttributeOrderFixer : public TokenAnalyzer {
                               const FormatToken *BeginTok,
                               const FormatToken *EndTok);
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override;

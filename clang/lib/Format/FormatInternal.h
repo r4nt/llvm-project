@@ -70,7 +70,7 @@ namespace internal {
 ///
 /// If ``Status`` is non-null, its value will be populated with the status of
 /// this formatting attempt. See \c FormattingAttemptStatus.
-std::pair<tooling::Replacements, unsigned>
+std::pair<tooling::Replacements, uint64_t>
 reformat(const FormatStyle &Style, StringRef Code,
          ArrayRef<tooling::Range> Ranges, unsigned FirstStartColumn,
          unsigned NextStartColumn, unsigned LastStartColumn, StringRef FileName,

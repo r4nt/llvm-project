@@ -22,6 +22,7 @@
 #include "clang/Format/Format.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/MathExtras.h"
 #include <optional>
 
 #define DEBUG_TYPE "format-indenter"
@@ -755,7 +756,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   return false;
 }
 
-unsigned ContinuationIndenter::addTokenToState(LineState &State, bool Newline,
+uint64_t ContinuationIndenter::addTokenToState(LineState &State, bool Newline,
                                                bool DryRun,
                                                unsigned ExtraSpaces) {
   const FormatToken &Current = *State.NextToken;
@@ -785,13 +786,14 @@ unsigned ContinuationIndenter::addTokenToState(LineState &State, bool Newline,
     return 0;
   }
 
-  unsigned Penalty = 0;
+  uint64_t Penalty = 0;
   if (Newline)
     Penalty = addTokenOnNewLine(State, DryRun);
   else
     addTokenOnCurrentLine(State, DryRun, ExtraSpaces);
 
-  return moveStateToNextToken(State, DryRun, Newline) + Penalty;
+  return llvm::SaturatingAdd<uint64_t>(
+      moveStateToNextToken(State, DryRun, Newline), Penalty);
 }
 
 void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
@@ -1145,7 +1147,7 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
   }
 }
 
-unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
+uint64_t ContinuationIndenter::addTokenOnNewLine(LineState &State,
                                                  bool DryRun) {
   FormatToken &Current = *State.NextToken;
   assert(State.NextToken->Previous);
@@ -1154,7 +1156,7 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
 
   // Extra penalty that needs to be added because of the way certain line
   // breaks are chosen.
-  unsigned Penalty = 0;
+  uint64_t Penalty = 0;
 
   const FormatToken *PreviousNonComment = Current.getPreviousNonComment();
   const FormatToken *NextNonComment = Previous.getNextNonComment();
@@ -1163,10 +1165,10 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
   // The first line break on any NestingLevel causes an extra penalty in order
   // prefer similar line breaks.
   if (!CurrentState.ContainsLineBreak)
-    Penalty += 15;
+    Penalty = llvm::SaturatingAdd<uint64_t>(Penalty, 15u);
   CurrentState.ContainsLineBreak = true;
 
-  Penalty += State.NextToken->SplitPenalty;
+  Penalty = llvm::SaturatingAdd<uint64_t>(Penalty, State.NextToken->SplitPenalty);
 
   // Breaking before the first "<<" is generally not desirable if the LHS is
   // short. Also always add the penalty if the LHS is split over multiple lines
@@ -1174,7 +1176,8 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
   if (NextNonComment->is(tok::lessless) && CurrentState.FirstLessLess == 0 &&
       (State.Column <= Style.ColumnLimit / 3 ||
        CurrentState.BreakBeforeParameter)) {
-    Penalty += Style.PenaltyBreakFirstLessLess;
+    Penalty =
+        llvm::SaturatingAdd<uint64_t>(Penalty, Style.PenaltyBreakFirstLessLess);
   }
 
   const auto [TotalColumn, IndentedFromColumn] = getNewLineColumn(State);
@@ -1193,8 +1196,9 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
   //   looooooooooooooooong_member(
   //       looooooooooong_call(param_1, param_2, param_3))
   if (State.Column > State.FirstIndent) {
-    Penalty +=
-        Style.PenaltyIndentedWhitespace * (State.Column - State.FirstIndent);
+    Penalty = llvm::SaturatingMultiplyAdd<uint64_t>(
+        Style.PenaltyIndentedWhitespace, State.Column - State.FirstIndent,
+        Penalty);
   }
 
   // Indent nested blocks relative to this column, unless in a very specific
@@ -1816,7 +1820,7 @@ static bool hasNestedBlockInlined(const FormatToken *Previous,
   return Style.BraceWrapping.BeforeLambdaBody && Current.is(TT_LambdaLSquare);
 }
 
-unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
+uint64_t ContinuationIndenter::moveStateToNextToken(LineState &State,
                                                     bool DryRun, bool Newline) {
   assert(State.Stack.size());
   const FormatToken &Current = *State.NextToken;
@@ -1981,7 +1985,7 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
     CurrentState.Indent = State.FirstIndent;
   }
 
-  unsigned Penalty =
+  uint64_t Penalty =
       handleEndOfLine(Current, State, DryRun, AllowBreak, Newline);
 
   if (Current.Role)
@@ -1991,8 +1995,10 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
   // role (comma separated list). That way, the decision whether or not to break
   // after the "{" is already done and both options are tried and evaluated.
   // FIXME: This is ugly, find a better way.
-  if (Previous && Previous->Role)
-    Penalty += Previous->Role->formatAfterToken(State, this, DryRun);
+  if (Previous && Previous->Role) {
+    Penalty = llvm::SaturatingAdd<uint64_t>(
+        Penalty, Previous->Role->formatAfterToken(State, this, DryRun));
+  }
 
   return Penalty;
 }
@@ -2389,7 +2395,7 @@ static unsigned getLastLineEndColumn(StringRef Text, unsigned StartColumn,
   }
 }
 
-unsigned ContinuationIndenter::reformatRawStringLiteral(
+uint64_t ContinuationIndenter::reformatRawStringLiteral(
     const FormatToken &Current, LineState &State,
     const FormatStyle &RawStringStyle, bool DryRun, bool Newline) {
   unsigned StartColumn = State.Column - Current.ColumnWidth;
@@ -2470,7 +2476,7 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   unsigned LastStartColumn =
       Current.NewlinesBefore ? FirstStartColumn - NewPrefixSize : CurrentIndent;
 
-  std::pair<tooling::Replacements, unsigned> Fixes = internal::reformat(
+  std::pair<tooling::Replacements, uint64_t> Fixes = internal::reformat(
       RawStringStyle, RawText, {tooling::Range(0, RawText.size())},
       FirstStartColumn, NextStartColumn, LastStartColumn, "<stdin>",
       /*Status=*/nullptr);
@@ -2533,10 +2539,11 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
     for (ParenState &Paren : State.Stack)
       Paren.BreakBeforeParameter = true;
   }
-  return Fixes.second + PrefixExcessCharacters * Style.PenaltyExcessCharacter;
+  return llvm::SaturatingMultiplyAdd<uint64_t>(
+      PrefixExcessCharacters, Style.PenaltyExcessCharacter, Fixes.second);
 }
 
-unsigned ContinuationIndenter::addMultilineToken(const FormatToken &Current,
+uint64_t ContinuationIndenter::addMultilineToken(const FormatToken &Current,
                                                  LineState &State) {
   // Break before further function parameters on all levels.
   for (ParenState &Paren : State.Stack)
@@ -2547,15 +2554,17 @@ unsigned ContinuationIndenter::addMultilineToken(const FormatToken &Current,
   // for all other lines is constant, and we ignore it.
   State.Column = Current.LastLineColumnWidth;
 
-  if (ColumnsUsed > getColumnLimit(State))
-    return Style.PenaltyExcessCharacter * (ColumnsUsed - getColumnLimit(State));
+  if (ColumnsUsed > getColumnLimit(State)) {
+    return llvm::SaturatingMultiply<uint64_t>(Style.PenaltyExcessCharacter,
+                                              ColumnsUsed - getColumnLimit(State));
+  }
   return 0;
 }
 
-unsigned ContinuationIndenter::handleEndOfLine(const FormatToken &Current,
+uint64_t ContinuationIndenter::handleEndOfLine(const FormatToken &Current,
                                                LineState &State, bool DryRun,
                                                bool AllowBreak, bool Newline) {
-  unsigned Penalty = 0;
+  uint64_t Penalty = 0;
   // Compute the raw string style to use in case this is a raw string literal
   // that can be reformatted.
   auto RawStringStyle = getRawStringStyle(Current, State);
@@ -2583,7 +2592,7 @@ unsigned ContinuationIndenter::handleEndOfLine(const FormatToken &Current,
       // If non-strict reflowing exceeds the column limit, try whether strict
       // reflowing leads to an overall lower penalty.
       LineState StrictState = OriginalState;
-      unsigned StrictPenalty =
+      uint64_t StrictPenalty =
           breakProtrudingToken(Current, StrictState, AllowBreak,
                                /*DryRun=*/true, /*Strict=*/true)
               .first;
@@ -2602,7 +2611,8 @@ unsigned ContinuationIndenter::handleEndOfLine(const FormatToken &Current,
   }
   if (State.Column > getColumnLimit(State)) {
     unsigned ExcessCharacters = State.Column - getColumnLimit(State);
-    Penalty += Style.PenaltyExcessCharacter * ExcessCharacters;
+    Penalty = llvm::SaturatingMultiplyAdd<uint64_t>(
+        Style.PenaltyExcessCharacter, ExcessCharacters, Penalty);
   }
   return Penalty;
 }
@@ -2763,7 +2773,7 @@ ContinuationIndenter::createBreakableToken(const FormatToken &Current,
   return nullptr;
 }
 
-std::pair<unsigned, bool>
+std::pair<uint64_t, bool>
 ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
                                            LineState &State, bool AllowBreak,
                                            bool DryRun, bool Strict) {
@@ -2816,7 +2826,7 @@ ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
     Token->adaptStartOfLine(0, Whitespaces);
 
   unsigned ContentIndent = 0;
-  unsigned Penalty = 0;
+  uint64_t Penalty = 0;
   LLVM_DEBUG(llvm::dbgs() << "Breaking protruding token at column "
                           << StartColumn << ".\n");
   for (unsigned LineIndex = 0, EndIndex = Token->getLineCount();
@@ -2848,8 +2858,10 @@ ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
         if (LineIndex < EndIndex - 1) {
           // The last line's penalty is handled in addNextStateToQueue() or when
           // calling replaceWhitespaceAfterLastLine below.
-          Penalty += Style.PenaltyExcessCharacter *
-                     (ContentStartColumn + RemainingTokenColumns - ColumnLimit);
+          Penalty = llvm::SaturatingMultiplyAdd<uint64_t>(
+              Style.PenaltyExcessCharacter,
+              ContentStartColumn + RemainingTokenColumns - ColumnLimit,
+              Penalty);
         }
         LLVM_DEBUG(llvm::dbgs() << "    No break opportunity.\n");
         break;
@@ -2906,13 +2918,13 @@ ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
         // line.
         bool ContinueOnLine =
             ContentStartColumn + ToNextSplitColumns <= ColumnLimit;
-        unsigned ExcessCharactersPenalty = 0;
+        uint64_t ExcessCharactersPenalty = 0;
         if (!ContinueOnLine && !Strict) {
           // Similarly, if the excess characters' penalty is lower than the
           // penalty of introducing a new break, continue on the current line.
-          ExcessCharactersPenalty =
-              (ContentStartColumn + ToNextSplitColumns - ColumnLimit) *
-              Style.PenaltyExcessCharacter;
+          ExcessCharactersPenalty = llvm::SaturatingMultiply<uint64_t>(
+              ContentStartColumn + ToNextSplitColumns - ColumnLimit,
+              Style.PenaltyExcessCharacter);
           LLVM_DEBUG(llvm::dbgs()
                      << "    Penalty excess: " << ExcessCharactersPenalty
                      << "\n            break : " << NewBreakPenalty << "\n");
@@ -2932,7 +2944,8 @@ ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
           }
           // When we continue on the same line, leave one space between content.
           ContentStartColumn += ToSplitColumns + 1;
-          Penalty += ExcessCharactersPenalty;
+          Penalty =
+              llvm::SaturatingAdd<uint64_t>(Penalty, ExcessCharactersPenalty);
           TailOffset += Split.first + Split.second;
           RemainingTokenColumns = Token->getRemainingLength(
               LineIndex, TailOffset, ContentStartColumn);
@@ -2978,7 +2991,7 @@ ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
                            Whitespaces);
       }
 
-      Penalty += NewBreakPenalty;
+      Penalty = llvm::SaturatingAdd<uint64_t>(Penalty, NewBreakPenalty);
       TailOffset += Split.first + Split.second;
       RemainingTokenColumns = NewRemainingTokenColumns;
       BreakInserted = true;
@@ -3052,9 +3065,10 @@ ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
                 LLVM_DEBUG(llvm::dbgs() << "    Next split protrudes, need: "
                                         << (ContentStartColumn + ToSplitColumns)
                                         << ", space: " << ColumnLimit);
-                unsigned ExcessCharactersPenalty =
-                    (ContentStartColumn + ToSplitColumns - ColumnLimit) *
-                    Style.PenaltyExcessCharacter;
+                uint64_t ExcessCharactersPenalty =
+                    llvm::SaturatingMultiply<uint64_t>(
+                        ContentStartColumn + ToSplitColumns - ColumnLimit,
+                        Style.PenaltyExcessCharacter);
                 if (NewBreakPenalty < ExcessCharactersPenalty)
                   Reflow = false;
               }
@@ -3107,8 +3121,9 @@ ContinuationIndenter::breakProtrudingToken(const FormatToken &Current,
 
     // We add the last line's penalty here, since that line is going to be split
     // now.
-    Penalty += Style.PenaltyExcessCharacter *
-               (ContentStartColumn + RemainingTokenColumns - ColumnLimit);
+    Penalty = llvm::SaturatingMultiplyAdd<uint64_t>(
+        Style.PenaltyExcessCharacter,
+        ContentStartColumn + RemainingTokenColumns - ColumnLimit, Penalty);
 
     if (!DryRun) {
       Token->replaceWhitespaceAfterLastLine(TailOffset, SplitAfterLastLine,

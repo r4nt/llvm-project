@@ -15,6 +15,7 @@
 #include "FormatToken.h"
 #include "ContinuationIndenter.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/MathExtras.h"
 #include <climits>
 
 namespace clang {
@@ -97,7 +98,7 @@ TokenRole::~TokenRole() {}
 
 void TokenRole::precomputeFormattingInfos(const FormatToken *Token) {}
 
-unsigned CommaSeparatedList::formatAfterToken(LineState &State,
+uint64_t CommaSeparatedList::formatAfterToken(LineState &State,
                                               ContinuationIndenter *Indenter,
                                               bool DryRun) {
   if (!State.NextToken || !State.NextToken->Previous)
@@ -130,7 +131,7 @@ unsigned CommaSeparatedList::formatAfterToken(LineState &State,
     return 10'000;
 
   // Format the entire list.
-  unsigned Penalty = 0;
+  uint64_t Penalty = 0;
   unsigned Column = 0;
   unsigned Item = 0;
   while (State.NextToken != LBrace->MatchingParen) {
@@ -152,7 +153,8 @@ unsigned CommaSeparatedList::formatAfterToken(LineState &State,
     }
 
     // Place token using the continuation indenter and store the penalty.
-    Penalty += Indenter->addTokenToState(State, NewLine, DryRun, ExtraSpaces);
+    Penalty = llvm::SaturatingAdd(
+        Penalty, Indenter->addTokenToState(State, NewLine, DryRun, ExtraSpaces));
   }
   return Penalty;
 }

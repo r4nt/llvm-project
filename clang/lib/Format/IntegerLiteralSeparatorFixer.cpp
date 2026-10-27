@@ -41,7 +41,7 @@ static Base getBase(StringRef IntegerLiteral) {
   }
 }
 
-std::pair<tooling::Replacements, unsigned>
+std::pair<tooling::Replacements, uint64_t>
 IntegerLiteralSeparatorFixer::process(const Environment &Env,
                                       const FormatStyle &Style) {
   const auto LangOpts = getFormattingLangOpts(Style);

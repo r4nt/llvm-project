@@ -20,7 +20,7 @@
 namespace clang {
 namespace format {
 
-typedef std::function<std::pair<tooling::Replacements, unsigned>(
+typedef std::function<std::pair<tooling::Replacements, uint64_t>(
     const Environment &)>
     AnalyzerPass;
 
@@ -51,7 +51,7 @@ public:
       const std::vector<tok::TokenKind> &ConfiguredQualifierTokens,
       bool RightAlign);
 
-  std::pair<tooling::Replacements, unsigned>
+  std::pair<tooling::Replacements, uint64_t>
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override;

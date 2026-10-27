@@ -121,7 +121,7 @@ static std::string format(StringRef NumericLiteral, const FormatStyle &Style) {
   return Formatted;
 }
 
-std::pair<tooling::Replacements, unsigned>
+std::pair<tooling::Replacements, uint64_t>
 NumericLiteralCaseFixer::process(const Environment &Env,
                                  const FormatStyle &Style) {
   if (!isNumericLiteralCaseFixerNeeded(Style))

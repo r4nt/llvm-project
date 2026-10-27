@@ -93,7 +93,7 @@ TokenAnalyzer::TokenAnalyzer(const Environment &Env, const FormatStyle &Style)
                           << "\n");
 }
 
-std::pair<tooling::Replacements, unsigned>
+std::pair<tooling::Replacements, uint64_t>
 TokenAnalyzer::process(bool SkipAnnotation) {
   tooling::Replacements Result;
   llvm::SpecificBumpPtrAllocator<FormatToken> Allocator;
@@ -104,7 +104,7 @@ TokenAnalyzer::process(bool SkipAnnotation) {
   ArrayRef<FormatToken *> Toks(Lex.lex());
   SmallVector<FormatToken *, 10> Tokens(Toks);
 
-  unsigned Penalty = 0;
+  uint64_t Penalty = 0;
   unsigned Run = 0;
   bool HasError = false;
   OnFinishRun = [&]() {
@@ -121,7 +121,7 @@ TokenAnalyzer::process(bool SkipAnnotation) {
         Annotator.annotate(*AnnotatedLines.back());
     }
 
-    std::pair<tooling::Replacements, unsigned> RunResult =
+    std::pair<tooling::Replacements, uint64_t> RunResult =
         analyze(Annotator, AnnotatedLines, Lex);
 
     LLVM_DEBUG({
