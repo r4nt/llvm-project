@@ -1690,8 +1690,9 @@ ContinuationIndenter::getNewLineColumn(const LineState &State) {
         PreviousNonComment->ClosesRequiresClause ||
         (PreviousNonComment->is(TT_AttributeMacro) &&
          Current.isNot(tok::l_paren) &&
-         !Current.endsSequence(TT_StartOfName, TT_AttributeMacro,
-                               TT_PointerOrReference)) ||
+         !(Current.is(TT_StartOfName) && PreviousNonComment->Previous &&
+           PreviousNonComment->Previous->isOneOf(TT_PointerOrReference,
+                                                 TT_TemplateCloser))) ||
         (PreviousNonComment->isOneOf(TT_AttributeRParen, TT_AttributeRSquare,
                                      TT_FunctionAnnotationRParen,
                                      TT_JavaAnnotation,

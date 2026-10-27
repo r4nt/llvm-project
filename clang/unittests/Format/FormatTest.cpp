@@ -12923,6 +12923,11 @@ TEST_F(FormatTest, UnderstandsAttributes) {
   verifyFormat("void foo(const MyLongTypeNameeeeeeeeeeeee* my_fancy_attr\n"
                "             testttttttttt);",
                Style);
+  verifyGoogleFormat(
+      "struct MyClass {\n"
+      "  std::shared_ptr<const RequestCacheContext> absl_nonnull\n"
+      "      request_cache_context1;\n"
+      "};");
 }
 
 TEST_F(FormatTest, UnderstandsPointerQualifiersInCast) {
