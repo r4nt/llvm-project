@@ -227,16 +227,24 @@ public:
           MergedLines = 0;
     }
     if (MergedLines > 0) {
+      bool HasMacroExpansion = false;
       bool MergingEmptyBlock = MergedLines == 1 &&
                                Next[0]->endsWith(tok::l_brace) &&
                                Next[1]->startsWith(tok::r_brace);
       for (unsigned i = 0; i <= MergedLines; ++i) {
+        if (Next[i]->InMacroExpansion)
+          HasMacroExpansion = true;
         if (cannotMergeMacroLine(Next[i],
                                  /*AllowMultiLine=*/i == 0 &&
                                      MergingEmptyBlock)) {
           MergedLines = 0;
           break;
         }
+      }
+      if (HasMacroExpansion) {
+        for (unsigned i = 0; i <= MergedLines; ++i)
+          Next[i]->InMacroExpansion = true;
+        MergedLines = 0;
       }
     }
     if (!DryRun)
@@ -1547,6 +1555,17 @@ private:
   llvm::SpecificBumpPtrAllocator<StateNode> Allocator;
 };
 
+static bool shouldDeferFirstToken(const AnnotatedLine &Line,
+                                  const AnnotatedLine *PreviousLine,
+                                  const AnnotatedLine *PrevPrevLine) {
+  if (Line.InPPDirective || Line.isComment())
+    return false;
+  return Line.InMacroExpansion ||
+         (PreviousLine && PreviousLine->InMacroExpansion) ||
+         (Line.startsWith(tok::r_brace) && PrevPrevLine &&
+          PrevPrevLine->InMacroExpansion);
+}
+
 } // anonymous namespace
 
 unsigned UnwrappedLineFormatter::format(
@@ -1670,8 +1689,12 @@ unsigned UnwrappedLineFormatter::format(
       NextLine = Joiner.getNextMergedLine(DryRun, IndentTracker);
       RangeMinLevel = UINT_MAX;
     }
-    if (!DryRun)
-      markFinalized(TheLine.First, /*SkipFirst=*/TheLine.InMacroExpansion);
+    if (!DryRun) {
+      markFinalized(
+          TheLine.First,
+          /*SkipFirst=*/shouldDeferFirstToken(TheLine, PreviousLine,
+                                              PrevPrevLine));
+    }
   }
   PenaltyCache[CacheKey] = Penalty;
   return Penalty;
@@ -1794,16 +1817,17 @@ void UnwrappedLineFormatter::formatFirstToken(const AnnotatedLine &Line,
                                               unsigned Indent,
                                               unsigned NewlineIndent) {
   FormatToken &RootToken = *Line.First;
+  bool CreateReplacement =
+      !shouldDeferFirstToken(Line, PreviousLine, PrevPrevLine);
   if (RootToken.is(tok::eof)) {
     unsigned Newlines = std::min(
         RootToken.NewlinesBefore,
         Style.KeepEmptyLines.AtEndOfFile ? Style.MaxEmptyLinesToKeep + 1 : 1);
     unsigned TokenIndent = Newlines ? NewlineIndent : 0;
-    Whitespaces->replaceWhitespace(
-        RootToken, Newlines, TokenIndent, TokenIndent, /*AlignedTo=*/nullptr,
-        /*InPPDirective=*/false,
-        /*IndentedFromColumn=*/0,
-        /*CreateReplacement=*/!Line.InMacroExpansion);
+    Whitespaces->replaceWhitespace(RootToken, Newlines, TokenIndent,
+                                   TokenIndent, /*AlignedTo=*/nullptr,
+                                   /*InPPDirective=*/false,
+                                   /*IndentedFromColumn=*/0, CreateReplacement);
     return;
   }
 
@@ -1825,10 +1849,18 @@ void UnwrappedLineFormatter::formatFirstToken(const AnnotatedLine &Line,
     Indent = 0;
   }
 
+  if (Line.InMacroExpansion && RootToken.MacroCtx &&
+      RootToken.MacroCtx->StartOfExpansion &&
+      !RootToken.MacroCtx->ExpandedFrom.empty()) {
+    Whitespaces->addUntouchableToken(*RootToken.MacroCtx->ExpandedFrom.front(),
+                                     Line.InPPDirective);
+    return;
+  }
+
   Whitespaces->replaceWhitespace(
       RootToken, RootToken.Newlines, Indent, Indent, /*AlignedTo=*/nullptr,
       Line.InPPDirective && !RootToken.HasUnescapedNewline,
-      /*IndentedFromColumn=*/0, /*CreateReplacement=*/!Line.InMacroExpansion);
+      /*IndentedFromColumn=*/0, CreateReplacement);
 }
 
 unsigned

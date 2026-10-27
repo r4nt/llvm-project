@@ -229,6 +229,19 @@ void UnwrappedLineParser::parse() {
     // In a first run, format everything with the lines containing macro calls
     // replaced by the expansion.
     if (!ExpandedLines.empty()) {
+      SmallVector<size_t> ExpandedLineIndex(Lines.size());
+      size_t CurrentIndex = 0;
+      for (size_t I = 0, E = Lines.size(); I < E; ++I) {
+        ExpandedLineIndex[I] = CurrentIndex;
+        if (!Lines[I].Tokens.empty()) {
+          auto it = ExpandedLines.find(Lines[I].Tokens.begin()->Tok);
+          if (it != ExpandedLines.end()) {
+            CurrentIndex += it->second.size();
+            continue;
+          }
+        }
+        ++CurrentIndex;
+      }
       LLVM_DEBUG(llvm::dbgs() << "Expanded lines:\n");
       for (auto &Line : Lines) {
         if (!Line.Tokens.empty()) {
@@ -242,10 +255,16 @@ void UnwrappedLineParser::parse() {
             continue;
           }
         }
-        Line.InMacroExpansion = true;
+        size_t OrigOpening = Line.MatchingOpeningBlockLineIndex;
+        size_t OrigClosing = Line.MatchingClosingBlockLineIndex;
+        if (OrigOpening < ExpandedLineIndex.size())
+          Line.MatchingOpeningBlockLineIndex = ExpandedLineIndex[OrigOpening];
+        if (OrigClosing < ExpandedLineIndex.size())
+          Line.MatchingClosingBlockLineIndex = ExpandedLineIndex[OrigClosing];
         LLVM_DEBUG(printDebugInfo(Line));
         Callback.consumeUnwrappedLine(Line);
-        Line.InMacroExpansion = false;
+        Line.MatchingOpeningBlockLineIndex = OrigOpening;
+        Line.MatchingClosingBlockLineIndex = OrigClosing;
       }
       Callback.finishRun();
     }
@@ -4896,8 +4915,13 @@ void UnwrappedLineParser::addUnwrappedLine(LineLevel AdjustLevel) {
 bool UnwrappedLineParser::eof() const { return FormatTok->is(tok::eof); }
 
 bool UnwrappedLineParser::isOnNewLine(const FormatToken &FormatTok) {
-  return (Line->InPPDirective || FormatTok.HasUnescapedNewline) &&
-         FormatTok.NewlinesBefore > 0;
+  const FormatToken &Tok =
+      (FormatTok.MacroCtx && FormatTok.MacroCtx->StartOfExpansion &&
+       !FormatTok.MacroCtx->ExpandedFrom.empty())
+          ? *FormatTok.MacroCtx->ExpandedFrom.front()
+          : FormatTok;
+  return (Line->InPPDirective || Tok.HasUnescapedNewline) &&
+         Tok.NewlinesBefore > 0;
 }
 
 // Checks if \p FormatTok is a line comment that continues the line comment
@@ -5078,9 +5102,13 @@ void UnwrappedLineParser::distributeComments(
   bool HasTrailAlignedWithNextToken = false;
   unsigned StartOfTrailAlignedWithNextToken = 0;
   if (NextTok) {
+    const FormatToken *TokForColumn =
+        (NextTok->MacroCtx && !NextTok->MacroCtx->ExpandedFrom.empty())
+            ? NextTok->MacroCtx->ExpandedFrom.front()
+            : NextTok;
     // We are skipping the first element intentionally.
     for (unsigned i = Comments.size() - 1; i > 0; --i) {
-      if (Comments[i]->OriginalColumn == NextTok->OriginalColumn) {
+      if (Comments[i]->OriginalColumn == TokForColumn->OriginalColumn) {
         HasTrailAlignedWithNextToken = true;
         StartOfTrailAlignedWithNextToken = i;
       }

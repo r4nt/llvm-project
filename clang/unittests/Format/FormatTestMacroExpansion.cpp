@@ -633,6 +633,99 @@ TEST_F(FormatTestMacroExpansion, RawStringLiteralInMacroArg) {
   verifyFormat(Code3, Code3, Style);
 }
 
+TEST_F(FormatTestMacroExpansion, NamespaceEndCommentsWithMultiLineMacro) {
+  FormatStyle Style = getGoogleStyle(FormatStyle::LK_Cpp);
+  Style.Macros.push_back("ASSIGN_OR_RETURN(a, b)=if (int x = 0) { a = (b); }");
+
+  verifyFormat("namespace {\n"
+               "void f() {\n"
+               "  ASSIGN_OR_RETURN(int a, 1);\n"
+               "  ASSIGN_OR_RETURN(int b, 2);\n"
+               "  if (a) {\n"
+               "    return;\n"
+               "  }\n"
+               "}\n"
+               "}  // namespace",
+               "namespace {\n"
+               "void f() {\n"
+               "  ASSIGN_OR_RETURN(int a, 1);\n"
+               "  ASSIGN_OR_RETURN(int b, 2);\n"
+               "  if (a) {\n"
+               "    return;\n"
+               "  }\n"
+               "}\n"
+               "}",
+               Style);
+}
+
+TEST_F(FormatTestMacroExpansion, NonMacroLinesInFileWithMacroExpansion) {
+  FormatStyle Style = getGoogleStyle(FormatStyle::LK_Cpp);
+  Style.Macros.push_back("ASSIGN_OR_RETURN(a, b)=if (int x = 0) { a = (b); }");
+
+  // Multi-line #define escaped newlines, constructor initializer packing +
+  // empty braces, and aligned trailing comments on short ifs should not be
+  // affected by the presence of an expanded macro in the same file.
+  StringRef Code =
+      "#define MY_MACRO(a, b) \\\n"
+      "  do {                 \\\n"
+      "    (a) = (b);         \\\n"
+      "  } while (0)\n"
+      "\n"
+      "class Foo {\n"
+      " public:\n"
+      "  Foo(int a, int b) : a_(a), b_(b) {}\n"
+      "\n"
+      "  void f() {\n"
+      "    ASSIGN_OR_RETURN(int x, g());\n"
+      "    if (a_) return;      // comment 1\n"
+      "    if (b_ > 0) return;  // comment 2\n"
+      "  }\n"
+      "\n"
+      " private:\n"
+      "  int a_;\n"
+      "  int b_;\n"
+      "};";
+  verifyFormat(Code, Code, Style);
+
+  // Standalone comments after a macro expansion and unaligned code, as well as
+  // standalone comments before a multi-line macro call.
+  verifyFormat("class Bar {\n"
+               "  ASSIGN_OR_RETURN(int x, g());\n"
+               "\n"
+               " private:\n"
+               "  // Comment aligned with next line.\n"
+               "  bool h() { return true; }\n"
+               "};\n"
+               "void g() {\n"
+               "  int a = 1;  // trailing comment\n"
+               "  // standalone comment\n"
+               "\n"
+               "  // another standalone comment\n"
+               "  ASSIGN_OR_RETURN(int b,\n"
+               "                   very_long_function_call_that_wraps(1, 2, 3, "
+               "4, 5, 6, 7));\n"
+               "}",
+               "class Bar {\n"
+               "  ASSIGN_OR_RETURN(int x, g());\n"
+               "\n"
+               "private:\n"
+               "// Comment aligned with next line.\n"
+               "bool h() {\n"
+               "  return true;\n"
+               "}\n"
+               "};\n"
+               "void g() {\n"
+               "  int a = 1;  // trailing comment\n"
+               "  // standalone comment\n"
+               "\n"
+               "  // another standalone comment\n"
+               "  ASSIGN_OR_RETURN(int b,\n"
+               "                   very_long_function_call_that_wraps(1, 2, 3, "
+               "4, 5, 6, 7));\n"
+               "}",
+               Style);
+}
+
 } // namespace
 } // namespace test
 } // namespace format

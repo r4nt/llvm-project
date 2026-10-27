@@ -120,7 +120,12 @@ bool AffectedRangeManager::nonPPLineAffected(
   assert(Line->First);
   for (FormatToken *Tok = Line->First; Tok; Tok = Tok->Next) {
     // Determine whether 'Tok' was affected.
-    if (affectsTokenRange(*Tok, *Tok, IncludeLeadingNewlines))
+    const FormatToken *RangeTok =
+        (Tok->MacroCtx && Tok->MacroCtx->Role == MR_Hidden &&
+         !Tok->MacroCtx->ExpandedFrom.empty())
+            ? Tok->MacroCtx->ExpandedFrom.front()
+            : Tok;
+    if (affectsTokenRange(*RangeTok, *RangeTok, IncludeLeadingNewlines))
       SomeTokenAffected = true;
 
     // Determine whether the first child of 'Tok' was affected.
